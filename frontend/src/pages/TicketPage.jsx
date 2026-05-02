@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { apiPath } from '../config';
 
 const useWindowWidth = () => {
   const [width, setWidth] = useState(window.innerWidth);
@@ -17,45 +18,68 @@ const TicketPage = () => {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const fetchTickets = async () => {
+  const [error, setError] = useState('');
+  const [actionMessage, setActionMessage] = useState('');
+  const fetchTickets = useCallback(async () => {
     if (!user) return;
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:3001/tickets/user/${user.id}`);
+      const response = await fetch(apiPath(`/tickets/user/${user.id}`));
       if (response.ok) {
         const data = await response.json();
         setTickets(data);
       } else {
         setError('Failed to fetch tickets');
       }
-    } catch (err) {
+    } catch {
       setError('Connection error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     if (!user) {
       navigate('/login');
       return;
     }
-    fetchTickets();
-  }, [user, navigate]);
+    const initialTimer = setTimeout(() => {
+      void fetchTickets();
+    }, 0);
+    return () => clearTimeout(initialTimer);
+  }, [user, navigate, fetchTickets]);
+
+  const showActionMessage = (msg, isError = false) => {
+    setActionMessage({ text: msg, isError });
+    setTimeout(() => setActionMessage(''), 4000);
+  };
 
   const updateTicketStatus = async (ticketId, newStatus) => {
+    if (newStatus === 'cancelled') {
+      if (!window.confirm('Are you sure you want to cancel this ticket?')) return;
+    }
     try {
-      const response = await fetch(`http://localhost:3001/tickets/${ticketId}`, {
+      const response = await fetch(apiPath(`/tickets/${ticketId}/self`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
+        body: JSON.stringify({ status: newStatus, userId: user.id })
       });
+      const data = await response.json();
       if (response.ok) {
-        fetchTickets(); // Refresh list
+        fetchTickets();
+        if (newStatus === 'cancelled') {
+          showActionMessage('Ticket cancelled');
+        } else if (newStatus === 'paused') {
+          showActionMessage('Ticket paused — your spot is held');
+        } else if (newStatus === 'waiting') {
+          showActionMessage('Ticket resumed — back in queue');
+        }
+      } else {
+        showActionMessage(data.error || 'Action failed', true);
       }
     } catch (err) {
       console.error('Error updating ticket:', err);
+      showActionMessage('Connection error', true);
     }
   };
 
@@ -63,12 +87,13 @@ const TicketPage = () => {
 
   // We show the first active ticket
   const ticket = tickets.length > 0 ? tickets[0] : null;
+  const activeTicketId = ticket?.id;
 
   useEffect(() => {
     const fetchQueuePosition = async () => {
-      if (!ticket) return;
+      if (!activeTicketId) return;
       try {
-        const res = await fetch(`http://localhost:3001/tickets/position/${ticket.id}`);
+        const res = await fetch(apiPath(`/tickets/position/${activeTicketId}`));
         if (res.ok) {
           const data = await res.json();
           setRemainingInFront(data.position || 0);
@@ -78,13 +103,14 @@ const TicketPage = () => {
     fetchQueuePosition();
     const interval = setInterval(fetchQueuePosition, 10000); // Update every 10s
     return () => clearInterval(interval);
-  }, [ticket?.id]);
+  }, [activeTicketId]);
 
   const width = useWindowWidth();
   const isMobile = width <= 768;
   const isSmallMobile = width <= 480;
 
   if (loading) return <div style={styles.emptyWrap}><p>Loading tickets...</p></div>;
+  if (error) return <div style={styles.emptyWrap}><p>{error}</p></div>;
 
   if (tickets.length === 0) {
     return (
@@ -99,11 +125,13 @@ const TicketPage = () => {
     );
   }
 
-  // Format the ID as a ticket number like T-042
-  const ticketNumStr = `T-${String(ticket.id).padStart(3, '0')}`;
+  const prefix = ticket.ticket_prefix || 'T';
+  const queueNum = ticket.queue_number || ticket.id;
+  const ticketNumStr = `${prefix}-${String(queueNum).padStart(2, '0')}`;
   
   const progressPercent = ticket.status === 'called' ? 100 : Math.min(95, Math.max(5, 100 - (remainingInFront * 15)));
-  const waitTime = remainingInFront * 5;
+  const waitTimePerPerson = ticket.estimated_wait_time || 5;
+  const waitTime = remainingInFront * waitTimePerPerson;
 
   const dynamicStyles = {
     main: {
@@ -143,15 +171,66 @@ const TicketPage = () => {
         <div style={styles.blurTop}></div>
         <div style={styles.blurBottom}></div>
 
-        {/* Notification Toast */}
-        <div style={styles.toastContainer}>
-          <div className="glass-panel" style={styles.toast}>
-            <span className="material-symbols-outlined" style={{ color: 'var(--primary)', fontVariationSettings: "'FILL' 1" }}>info</span>
-            <span style={styles.toastText}>
-              {remainingInFront === 0 ? "You're being served now!" : isSmallMobile ? `${remainingInFront} people ahead` : `You're getting closer! ${remainingInFront} ${remainingInFront === 1 ? 'person' : 'people'} ahead of you.`}
-            </span>
+        {/* Called State Banner */}
+        {ticket.status === 'called' && (
+          <div style={styles.calledBanner}>
+            <span className="material-symbols-outlined" style={{ fontSize: '2rem', fontVariationSettings: "'FILL' 1" }}>campaign</span>
+            <div>
+              <h2 style={styles.calledTitle}>YOU'RE BEING CALLED!</h2>
+              <p style={styles.calledSub}>Please proceed to the service counter now.</p>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Paused State Banner */}
+        {ticket.status === 'paused' && (
+          <div style={styles.pausedBanner}>
+            <span className="material-symbols-outlined" style={{ fontSize: '2rem', fontVariationSettings: "'FILL' 1" }}>pause_circle</span>
+            <div>
+              <h2 style={styles.pausedTitle}>TICKET PAUSED</h2>
+              <p style={styles.pausedSub}>Your spot is held. Resume when you're ready.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Action Feedback Toast */}
+        {actionMessage && (
+          <div style={styles.toastContainer}>
+            <div className="glass-panel" style={{
+              ...styles.toast,
+              ...(actionMessage.isError ? styles.toastError : styles.toastSuccess)
+            }}>
+              <span className="material-symbols-outlined" style={{ color: actionMessage.isError ? '#fff' : 'var(--primary)', fontVariationSettings: "'FILL' 1" }}>
+                {actionMessage.isError ? 'error' : 'check_circle'}
+              </span>
+              <span style={{ ...styles.toastText, color: actionMessage.isError ? '#fff' : 'var(--on-primary-container)' }}>
+                {actionMessage.text}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Notification Toast — only show when no action message */}
+        {!actionMessage && (
+          <div style={styles.toastContainer}>
+            <div className="glass-panel" style={{ ...styles.toast, ...(ticket.status === 'called' ? styles.toastCalled : {}) }}>
+              <span className="material-symbols-outlined" style={{ color: ticket.status === 'called' ? 'white' : 'var(--primary)', fontVariationSettings: "'FILL' 1" }}>
+                {ticket.status === 'called' ? 'notifications_active' : ticket.status === 'paused' ? 'hourglass_top' : 'info'}
+              </span>
+              <span style={{ ...styles.toastText, color: ticket.status === 'called' ? 'white' : 'var(--on-primary-container)' }}>
+                {ticket.status === 'called'
+                  ? 'Your number has been called — go to the counter!'
+                  : ticket.status === 'paused'
+                    ? `Position held — ${remainingInFront} ahead when you resume`
+                    : remainingInFront === 0
+                      ? "You're next!"
+                      : isSmallMobile
+                        ? `${remainingInFront} people ahead`
+                        : `${remainingInFront} ${remainingInFront === 1 ? 'person' : 'people'} ahead of you.`}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Main Ticket Card */}
         <div className="glass-card" style={dynamicStyles.ticketCard}>
@@ -165,7 +244,7 @@ const TicketPage = () => {
             <div style={dynamicStyles.headerRight}>
               <div style={styles.servingBadge}>
                 <span className="material-symbols-outlined" style={{ fontSize: '1.25rem' }}>campaign</span>
-                Serving: T-0{Math.max(1, ticket.id - remainingInFront)}
+                Serving: {ticketNumStr}
               </div>
               <div style={styles.locationTag} className="hide-mobile">
                 <span className="material-symbols-outlined" style={{ fontSize: '1.25rem', fontVariationSettings: "'FILL' 1" }}>location_on</span>
@@ -223,10 +302,10 @@ const TicketPage = () => {
                 <span style={progressPercent >= 50 ? styles.stepLabel : styles.stepLabelInactive} className="hide-on-xsmall">WAITING</span>
               </div>
               <div style={styles.step}>
-                <div style={progressPercent >= 100 ? { ...styles.stepCircleActive, animation: 'pulse 1.5s infinite' } : styles.stepCircleDim}>
+                <div style={ticket.status === 'called' ? { ...styles.stepCircleActive, animation: 'pulse 1.5s infinite', backgroundColor: 'var(--tertiary)' } : styles.stepCircleDim}>
                   <span className="material-symbols-outlined" style={{ fontSize: '0.875rem' }}>notifications</span>
                 </div>
-                <span style={styles.stepLabelInactive} className="hide-on-xsmall">SERVING</span>
+                <span style={ticket.status === 'called' ? styles.stepLabel : styles.stepLabelInactive} className="hide-on-xsmall">SERVING</span>
               </div>
             </div>
           </div>
@@ -235,19 +314,27 @@ const TicketPage = () => {
           <div style={styles.actionRow}>
             <button 
               onClick={() => ticket.status === 'paused' ? updateTicketStatus(ticket.id, 'waiting') : updateTicketStatus(ticket.id, 'paused')}
-              style={styles.pauseBtn}
+              disabled={ticket.status === 'called'}
+              style={{
+                ...styles.pauseBtn,
+                ...(ticket.status === 'called' ? styles.actionBtnDisabled : {})
+              }}
             >
               <span className="material-symbols-outlined">{ticket.status === 'paused' ? 'play_circle' : 'pause_circle'}</span>
-              <span className="hide-mobile">{ticket.status === 'paused' ? 'Resume Ticket' : 'Pause Ticket'}</span>
-              <span className="show-mobile">{ticket.status === 'paused' ? 'Resume' : 'Pause'}</span>
+              <span className="hide-mobile">{ticket.status === 'paused' ? 'Resume Ticket' : ticket.status === 'called' ? 'Cannot Pause' : 'Pause Ticket'}</span>
+              <span className="show-mobile">{ticket.status === 'paused' ? 'Resume' : ticket.status === 'called' ? 'Called' : 'Pause'}</span>
             </button>
             <button 
               onClick={() => updateTicketStatus(ticket.id, 'cancelled')}
-              style={styles.cancelBtn}
+              disabled={ticket.status === 'called'}
+              style={{
+                ...styles.cancelBtn,
+                ...(ticket.status === 'called' ? styles.actionBtnDisabled : {})
+              }}
             >
               <span className="material-symbols-outlined">cancel</span>
-              <span className="hide-mobile">Cancel Ticket</span>
-              <span className="show-mobile">Cancel</span>
+              <span className="hide-mobile">{ticket.status === 'called' ? 'Being Called' : 'Cancel Ticket'}</span>
+              <span className="show-mobile">{ticket.status === 'called' ? 'Called' : 'Cancel'}</span>
             </button>
           </div>
         </div>
@@ -272,27 +359,6 @@ const TicketPage = () => {
         </div>
 
       </main>
-
-      {/* Mobile Bottom Nav */}
-      <nav className="glass-panel" style={dynamicStyles.bottomNav}>
-        <Link to="/" style={styles.navItemInactive}>
-          <span className="material-symbols-outlined">dashboard</span>
-          <span style={styles.navText}>Home</span>
-        </Link>
-        <Link to="/map" style={styles.navItemInactive}>
-          <span className="material-symbols-outlined">explore</span>
-          <span style={styles.navText}>Map</span>
-        </Link>
-        <Link to="/ticket" style={styles.navItemActive}>
-          <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>confirmation_number</span>
-          <span style={styles.navText}>Ticket</span>
-        </Link>
-        <Link to="/profile" style={styles.navItemInactive}>
-          <span className="material-symbols-outlined">person</span>
-          <span style={styles.navText}>Profile</span>
-        </Link>
-      </nav>
-
     </div>
   );
 };
@@ -364,6 +430,69 @@ const styles = {
     fontWeight: '600',
     color: 'var(--on-primary-container)'
   },
+  toastSuccess: {
+    backgroundColor: 'rgba(0, 85, 215, 0.08)',
+    border: '1px solid rgba(0, 85, 215, 0.2)'
+  },
+  toastError: {
+    backgroundColor: '#ac3149',
+    border: 'none'
+  },
+  toastCalled: {
+    backgroundColor: 'var(--tertiary)',
+    border: 'none',
+    boxShadow: '0 4px 12px rgba(255, 109, 0, 0.2)'
+  },
+  calledBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1.5rem',
+    padding: '1.5rem 2rem',
+    borderRadius: '1rem',
+    backgroundColor: 'var(--tertiary)',
+    color: 'white',
+    marginBottom: '2rem',
+    boxShadow: '0 8px 24px rgba(255, 109, 0, 0.3)'
+  },
+  calledTitle: {
+    fontSize: '1.25rem',
+    fontWeight: '900',
+    margin: 0,
+    letterSpacing: '0.02em'
+  },
+  calledSub: {
+    fontSize: '0.875rem',
+    margin: '0.25rem 0 0',
+    opacity: 0.9
+  },
+  pausedBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1.5rem',
+    padding: '1.5rem 2rem',
+    borderRadius: '1rem',
+    backgroundColor: 'var(--surface-container-highest)',
+    color: 'var(--on-surface)',
+    marginBottom: '2rem',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
+    borderLeft: '4px solid var(--secondary)'
+  },
+  pausedTitle: {
+    fontSize: '1.25rem',
+    fontWeight: '900',
+    margin: 0,
+    letterSpacing: '0.02em'
+  },
+  pausedSub: {
+    fontSize: '0.875rem',
+    margin: '0.25rem 0 0',
+    color: 'var(--on-surface-variant)'
+  },
+  actionBtnDisabled: {
+    opacity: 0.4,
+    cursor: 'not-allowed',
+    pointerEvents: 'none'
+  },
   ticketCard: {
     backgroundColor: 'white',
     padding: '3rem',
@@ -420,7 +549,7 @@ const styles = {
   },
   statsGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
     gap: '1.5rem',
     marginBottom: '3rem'
   },

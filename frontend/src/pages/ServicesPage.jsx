@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useQueue } from '../context/QueueContext';
+import { apiPath } from '../config';
 
 const useWindowWidth = () => {
   const [width, setWidth] = useState(window.innerWidth);
@@ -15,7 +16,7 @@ const useWindowWidth = () => {
 
 const ServicesPage = () => {
   const { user } = useAuth();
-  const { queueError, setQueueError } = useQueue();
+  const { queueError } = useQueue();
   const navigate = useNavigate();
   const [filter, setFilter] = useState('All Services');
   const width = useWindowWidth();
@@ -24,12 +25,11 @@ const ServicesPage = () => {
 
   const [dbServices, setDbServices] = useState([]);
   const [activeTickets, setActiveTickets] = useState([]);
-  const [isTakingTicket, setIsTakingTicket] = useState(false);
 
-  const fetchActiveTickets = async () => {
+  const fetchActiveTickets = useCallback(async () => {
     if (!user) return;
     try {
-      const response = await fetch(`http://localhost:3001/tickets/user/${user.id}`);
+      const response = await fetch(apiPath(`/tickets/user/${user.id}`));
       if (response.ok) {
         const data = await response.json();
         setActiveTickets(data);
@@ -37,12 +37,12 @@ const ServicesPage = () => {
     } catch (err) {
       console.error("Error fetching active tickets:", err);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     const fetchServices = async () => {
       try {
-        const response = await fetch('http://localhost:3001/services');
+        const response = await fetch(apiPath('/services'));
         if (response.ok) {
           const data = await response.json();
           setDbServices(data);
@@ -51,9 +51,12 @@ const ServicesPage = () => {
         console.error("Error fetching services:", error);
       }
     };
-    fetchServices();
-    fetchActiveTickets();
-  }, [user]);
+    const initialTimer = setTimeout(() => {
+      void fetchServices();
+      void fetchActiveTickets();
+    }, 0);
+    return () => clearTimeout(initialTimer);
+  }, [user, fetchActiveTickets]);
 
   const handleTakeTicket = async (serviceId) => {
     if (!user) {
@@ -61,9 +64,8 @@ const ServicesPage = () => {
       return;
     }
     
-    setIsTakingTicket(true);
     try {
-      const response = await fetch('http://localhost:3001/tickets', {
+      const response = await fetch(apiPath('/tickets'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, serviceId })
@@ -72,12 +74,12 @@ const ServicesPage = () => {
       if (response.ok) {
         navigate('/ticket');
       } else {
-        alert("Failed to take ticket. Please try again.");
+        const errData = await response.json();
+        alert(errData.error || 'Failed to take ticket. Please try again.');
       }
     } catch (error) {
-      console.error("Error taking ticket:", error);
-    } finally {
-      setIsTakingTicket(false);
+      console.error('Error taking ticket:', error);
+      alert('Network error. Please check your connection.');
     }
   };
 
@@ -88,7 +90,7 @@ const ServicesPage = () => {
   const uniqueCategories = ['All Services', ...new Set(dbServices.map(s => s.category))];
 
   return (
-    <div className="page-container">
+    <div className="page-container" style={isMobile ? { paddingBottom: '6rem', minHeight: '100vh' } : {}}>
       
       {/* Hero Section */}
       <header style={{
@@ -138,8 +140,12 @@ const ServicesPage = () => {
             return (
               <div key={service.id} className="glass-card" style={index === 0 ? {
                 ...styles.largeCard,
+                gridColumn: isMobile ? 'span 12' : 'span 8',
                 padding: isSmallMobile ? '1.5rem' : isMobile ? '2.5rem' : '3rem'
-              } : styles.smallCard}>
+              } : {
+                ...styles.smallCard,
+                gridColumn: isMobile ? 'span 12' : 'span 4'
+              }}>
                 
                 {/* Header / Icon */}
                 <div style={index === 0 ? styles.cardHeader : { ...styles.iconBox, backgroundColor: `var(--${service.color_theme})`, color: `var(--on-${service.color_theme})`, marginBottom: '1.5rem' }}>
@@ -157,6 +163,11 @@ const ServicesPage = () => {
                       {service.is_fast_track_available && (
                         <div style={styles.badge} className="hide-mobile">
                           FAST TRACK AVAILABLE
+                        </div>
+                      )}
+                  {!service.is_open && (
+                        <div style={styles.closedBadge}>
+                          CLOSED
                         </div>
                       )}
                     </>
@@ -219,22 +230,29 @@ const ServicesPage = () => {
                     flexDirection: isSmallMobile ? 'column' : 'row'
                   }}>
                     <button 
-                      className="primary-gradient" 
-                      style={{ ...styles.primaryAction, width: isSmallMobile ? '100%' : 'auto' }}
-                      onClick={() => handleTakeTicket(service.id)}
-                      disabled={hasActiveTicket(service.id)}
+                      className={(service.is_open && !hasActiveTicket(service.id)) ? 'primary-gradient' : ''}
+                      style={{ 
+                        ...styles.primaryAction, 
+                        width: isSmallMobile ? '100%' : 'auto',
+                        ...((!service.is_open || hasActiveTicket(service.id)) ? styles.disabledAction : {})
+                      }}
+                      onClick={() => service.is_open && !hasActiveTicket(service.id) && handleTakeTicket(service.id)}
+                      disabled={hasActiveTicket(service.id) || !service.is_open}
                     >
-                      {hasActiveTicket(service.id) ? 'Ticket Taken' : 'Take Ticket'}
+                      {!service.is_open ? 'Currently Closed' : hasActiveTicket(service.id) ? 'Ticket Taken' : 'Take Ticket'}
                     </button>
                     <button style={{ ...styles.secondaryAction, width: isSmallMobile ? '100%' : 'auto' }}>Details</button>
                   </div>
                 ) : (
                   <button 
-                    style={index % 2 === 1 ? styles.darkAction : styles.lightAction}
-                    onClick={() => handleTakeTicket(service.id)}
-                    disabled={hasActiveTicket(service.id)}
+                    style={{
+                      ...(index % 2 === 1 ? styles.darkAction : styles.lightAction),
+                      ...((!service.is_open || hasActiveTicket(service.id)) ? styles.disabledAction : {})
+                    }}
+                    onClick={() => service.is_open && !hasActiveTicket(service.id) && handleTakeTicket(service.id)}
+                    disabled={hasActiveTicket(service.id) || !service.is_open}
                   >
-                    {hasActiveTicket(service.id) ? 'Ticket Taken' : 'Take Ticket'}
+                    {!service.is_open ? 'Currently Closed' : hasActiveTicket(service.id) ? 'Ticket Taken' : 'Take Ticket'}
                   </button>
                 )}
 
@@ -247,7 +265,11 @@ const ServicesPage = () => {
           })}
 
         {/* Custom Card */}
-        <div className="glass-card" style={styles.wideCard}>
+        <div className="glass-card" style={{
+          ...styles.wideCard,
+          gridColumn: isMobile ? 'span 12' : 'span 8',
+          flexDirection: isMobile ? 'column' : 'row'
+        }}>
           <div style={styles.wideContent}>
             <h3 className="headline" style={styles.cardTitleLarge}>Can't find your service?</h3>
             <p style={{ ...styles.cardDescSmall, fontSize: '1.1rem', marginBottom: '2.5rem' }}>
@@ -262,12 +284,15 @@ const ServicesPage = () => {
               </a>
             </div>
           </div>
-          <div style={styles.wideGraphic}>
-             <span className="material-symbols-outlined" style={{ fontSize: '6rem', color: 'var(--outline-variant)', opacity: 0.5 }}>help_center</span>
-          </div>
+          {!isMobile && (
+            <div style={styles.wideGraphic}>
+               <span className="material-symbols-outlined" style={{ fontSize: '6rem', color: 'var(--outline-variant)', opacity: 0.5 }}>help_center</span>
+            </div>
+          )}
         </div>
 
       </div>
+
     </div>
   );
 };
@@ -362,6 +387,23 @@ const styles = {
     fontSize: '0.75rem',
     fontWeight: '800',
     letterSpacing: '0.05em'
+  },
+  closedBadge: {
+    backgroundColor: 'rgba(172, 49, 73, 0.1)',
+    color: 'var(--error)',
+    padding: '0.5rem 1rem',
+    borderRadius: '9999px',
+    fontSize: '0.75rem',
+    fontWeight: '800',
+    letterSpacing: '0.05em',
+    border: '1px solid rgba(172, 49, 73, 0.2)'
+  },
+  disabledAction: {
+    backgroundColor: 'var(--surface-container-high)',
+    color: 'var(--on-surface-variant)',
+    opacity: 0.6,
+    cursor: 'not-allowed',
+    boxShadow: 'none'
   },
   cardBody: {
     position: 'relative',
@@ -534,6 +576,42 @@ const styles = {
     backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuCQxfX_0e604EaJDC6t2lXpijhbkfe-7XbMKwQEVWj3MtX8vxU-bX31w2KM7pK8ijHdTz0e38vSmOliHWOKuaqbMdc8AJICpWMGbqCMBhLCeMJYp12guuH_uekyAPGhz9h2obQYyKNwJFL6C8Ia61zD7vgeNG2io29z9iymh1LQRt0IRB-X32qc7Dn1LaUGZz3HkalZ_WSec3HDpE8ENaVwhUCmprQoAFRidWzZme_7rT5VTSxp78x4RfrH6kxfz6GrSpLgbCzK5aoA")',
     backgroundSize: 'cover',
     backgroundBlendMode: 'multiply'
+  },
+  bottomNav: {
+    display: 'flex',
+    position: 'fixed',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '5rem',
+    borderTop: '1px solid var(--surface-container-low)',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    zIndex: 100,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backdropFilter: 'blur(20px)',
+    borderRadius: '0'
+  },
+  navItemInactive: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '0.25rem',
+    color: '#64748b',
+    textDecoration: 'none'
+  },
+  navItemActive: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '0.25rem',
+    color: 'var(--primary)',
+    textDecoration: 'none'
+  },
+  navText: {
+    fontSize: '0.625rem',
+    fontWeight: '800',
+    textTransform: 'uppercase'
   }
 };
 

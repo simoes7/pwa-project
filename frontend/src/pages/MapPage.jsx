@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { apiPath } from '../config';
 
 // Fix leaflet marker icon issue in React
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -30,16 +31,29 @@ const MapPage = () => {
   const [selectedId, setSelectedId] = useState('bank');
   const [dbServices, setDbServices] = useState([]);
   const [isTakingTicket, setIsTakingTicket] = useState(false);
+  const [activeTickets, setActiveTickets] = useState([]);
   const { user } = useAuth();
   const navigate = useNavigate();
   const width = useWindowWidth();
   const isMobile = width <= 1024;
   const isSmallMobile = width <= 640;
   
+  const fetchActiveTickets = useCallback(async () => {
+    if (!user) return;
+    try {
+      const response = await fetch(apiPath(`/tickets/user/${user.id}`));
+      if (response.ok) {
+        setActiveTickets(await response.json());
+      }
+    } catch (err) {
+      console.error("Error fetching active tickets:", err);
+    }
+  }, [user]);
+
   useEffect(() => {
     const fetchServices = async () => {
       try {
-        const response = await fetch('http://localhost:3001/services');
+        const response = await fetch(apiPath('/services'));
         if (response.ok) {
           const data = await response.json();
           setDbServices(data);
@@ -52,7 +66,11 @@ const MapPage = () => {
       }
     };
     fetchServices();
-  }, []);
+    fetchActiveTickets();
+  }, [fetchActiveTickets]);
+
+  const hasActiveTicket = (serviceId) => activeTickets.some(t => t.service_id === serviceId);
+
 
   const selectedService = dbServices.find(s => s.id === selectedId) || dbServices[0] || {};
   const otherServices = dbServices.filter(s => s.id !== selectedId);
@@ -66,20 +84,22 @@ const MapPage = () => {
     
     setIsTakingTicket(true);
     try {
-      const response = await fetch('http://localhost:3001/tickets', {
+      const response = await fetch(apiPath('/tickets'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id || 1, serviceId: selectedService.id })
       });
       
       if (response.ok) {
-        alert("Digital Token generated successfully!");
+        alert('Digital Token generated successfully!');
         navigate('/ticket');
       } else {
-        alert("Failed to get a digital token.");
+        const errData = await response.json();
+        alert(errData.error || 'Failed to get a digital token.');
       }
     } catch (error) {
-      console.error("Error creating ticket:", error);
+      console.error('Error creating ticket:', error);
+      alert('Network error. Please check your connection.');
     } finally {
       setIsTakingTicket(false);
     }
@@ -213,13 +233,22 @@ const MapPage = () => {
 
               <div style={styles.featuredActions}>
                 <button 
-                  className="primary-gradient" 
-                  style={{...styles.tokenBtn, opacity: isTakingTicket ? 0.7 : 1}}
-                  onClick={handleTakeTicket}
-                  disabled={isTakingTicket}
+                  className={(selectedService.is_open && !hasActiveTicket(selectedService.id)) ? 'primary-gradient' : ''}
+                  style={{
+                    ...styles.tokenBtn, 
+                    opacity: isTakingTicket ? 0.7 : 1,
+                    ...((!selectedService.is_open || hasActiveTicket(selectedService.id)) ? {
+                      backgroundColor: 'var(--surface-container-high)',
+                      color: 'var(--on-surface-variant)',
+                      cursor: 'not-allowed',
+                      boxShadow: 'none'
+                    } : {})
+                  }}
+                  onClick={() => selectedService.is_open && !hasActiveTicket(selectedService.id) && handleTakeTicket()}
+                  disabled={isTakingTicket || !selectedService.is_open || hasActiveTicket(selectedService.id)}
                 >
                   <span className="material-symbols-outlined">confirmation_number</span>
-                  {isTakingTicket ? 'Generating...' : 'Get Digital Token'}
+                  {isTakingTicket ? 'Generating...' : !selectedService.is_open ? 'Currently Closed' : hasActiveTicket(selectedService.id) ? 'Ticket Taken' : 'Get Digital Token'}
                 </button>
                 <button 
                   style={styles.directionsBtn}
@@ -263,27 +292,6 @@ const MapPage = () => {
         </aside>
 
       </main>
-
-      {/* Mobile Bottom Nav */}
-      <nav className="glass-panel" style={dynamicStyles.bottomNav}>
-        <Link to="/" style={styles.navItemInactive}>
-          <span className="material-symbols-outlined">dashboard</span>
-          <span style={styles.navText}>Home</span>
-        </Link>
-        <Link to="/map" style={styles.navItemActive}>
-          <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>explore</span>
-          <span style={styles.navText}>Map</span>
-        </Link>
-        <Link to="/ticket" style={styles.navItemInactive}>
-          <span className="material-symbols-outlined">confirmation_number</span>
-          <span style={styles.navText}>Ticket</span>
-        </Link>
-        <Link to="/profile" style={styles.navItemInactive}>
-          <span className="material-symbols-outlined">person</span>
-          <span style={styles.navText}>Profile</span>
-        </Link>
-      </nav>
-
     </div>
   );
 };

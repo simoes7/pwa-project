@@ -1,29 +1,31 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import React, { createContext, useContext, useState } from 'react';
+import { apiPath } from '../config';
 
 const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [authError, setAuthError] = useState('');
-
-  useEffect(() => {
-    // Check for existing session
-    const storedUser = localStorage.getItem('smartQueueUser');
-    if (storedUser) {
-      const parsed = JSON.parse(storedUser);
-      // Safety check: If the ID is not a number (like 'admin_1' from mock phase), clear it
-      if (parsed && isNaN(Number(parsed.id))) {
-        localStorage.removeItem('smartQueueUser');
-        setUser(null);
-      } else {
-        setUser(parsed);
-      }
+const getInitialUser = () => {
+  const storedUser = localStorage.getItem('smartQueueUser');
+  if (!storedUser) return null;
+  try {
+    const parsed = JSON.parse(storedUser);
+    if (parsed && Number.isNaN(Number(parsed.id))) {
+      localStorage.removeItem('smartQueueUser');
+      return null;
     }
-    setLoading(false);
-  }, []);
+    return parsed;
+  } catch {
+    localStorage.removeItem('smartQueueUser');
+    return null;
+  }
+};
+
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(getInitialUser);
+  const [loading, setLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
 
   const login = async (email, password) => {
     setAuthError('');
@@ -33,7 +35,7 @@ export const AuthProvider = ({ children }) => {
     }
     
     try {
-      const response = await fetch('http://localhost:3001/login', {
+      const response = await fetch(apiPath('/login'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -66,7 +68,7 @@ export const AuthProvider = ({ children }) => {
     }
     
     try {
-      const response = await fetch('http://localhost:3001/register', {
+      const response = await fetch(apiPath('/register'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -96,8 +98,34 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('smartQueueUser');
   };
 
+  const loginWithGoogle = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/auth/google', {
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        if (error.error === 'Google OAuth not configured') {
+          setAuthError('Google OAuth is not configured. Please check the setup guide and configure your Google OAuth credentials.');
+          return;
+        }
+        throw new Error(error.message || 'Google OAuth setup error');
+      }
+      window.location.href = 'http://localhost:3001/auth/google';
+    } catch (error) {
+      console.error('Google OAuth error:', error);
+      setAuthError('Unable to connect to Google OAuth. Please check if the backend server is running.');
+    }
+  };
+
+  const handleGoogleAuthSuccess = (userData) => {
+    setUser(userData);
+    localStorage.setItem('smartQueueUser', JSON.stringify(userData));
+    return userData;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, authError, login, register, logout, setAuthError }}>
+    <AuthContext.Provider value={{ user, loading, authError, login, register, logout, loginWithGoogle, handleGoogleAuthSuccess, setAuthError }}>
       {!loading && children}
     </AuthContext.Provider>
   );

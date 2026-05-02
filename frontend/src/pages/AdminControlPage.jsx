@@ -1,28 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import AdminSidebar from '../components/AdminSidebar';
 import AdminTopBar from '../components/AdminTopBar';
+import { apiPath, adminHeaders } from '../config';
 
 const AdminControlPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [tickets, setTickets] = useState([]);
   const [services, setServices] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ avg_wait: 0, total_today: 0, currently_serving: 0 });
   const [showManualModal, setShowManualModal] = useState(false);
   const [manualName, setManualName] = useState('');
   const [manualService, setManualService] = useState('');
+  const [nowTs, setNowTs] = useState(() => Date.now());
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const serviceParam = user?.serviceId ? `?serviceId=${user.serviceId}` : '';
-      const serviceParamAmp = user?.serviceId ? `&serviceId=${user.serviceId}` : '';
       const [ticketsRes, servicesRes, statsRes] = await Promise.all([
-        fetch(`http://localhost:3001/tickets${serviceParam}`),
-        fetch('http://localhost:3001/services'),
-        fetch(`http://localhost:3001/stats${serviceParam}`)
+        fetch(apiPath(`/tickets${serviceParam}`), { headers: adminHeaders(user) }),
+        fetch(apiPath('/services'), { headers: adminHeaders(user) }),
+        fetch(apiPath(`/stats${serviceParam}`), { headers: adminHeaders(user) })
       ]);
       
       if (ticketsRes.ok && servicesRes.ok && statsRes.ok) {
@@ -33,22 +35,34 @@ const AdminControlPage = () => {
     } catch (err) {
       console.error('Error fetching admin data:', err);
     } finally {
-      setLoading(false);
+      // no-op
     }
-  };
+  }, [user]);
 
   useEffect(() => {
-    fetchData();
+    const initialTimer = setTimeout(() => {
+      void fetchData();
+    }, 0);
     // Poll for updates every 10 seconds
-    const interval = setInterval(fetchData, 10000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      void fetchData();
+    }, 10000);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
+  }, [fetchData]);
+
+  useEffect(() => {
+    const tick = setInterval(() => setNowTs(Date.now()), 60000);
+    return () => clearInterval(tick);
   }, []);
 
   const handleCallNext = async (serviceId) => {
     try {
-      const response = await fetch('http://localhost:3001/tickets/call-next', {
+      const response = await fetch(apiPath('/tickets/call-next'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: adminHeaders(user),
         body: JSON.stringify({ serviceId })
       });
       if (response.ok) {
@@ -61,9 +75,9 @@ const AdminControlPage = () => {
 
   const updateTicketStatus = async (ticketId, status) => {
     try {
-      const response = await fetch(`http://localhost:3001/tickets/${ticketId}`, {
+      const response = await fetch(apiPath(`/tickets/${ticketId}`), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: adminHeaders(user),
         body: JSON.stringify({ status })
       });
       if (response.ok) {
@@ -85,11 +99,11 @@ const AdminControlPage = () => {
     if (!manualName || !manualService) return;
 
     try {
-      const response = await fetch('http://localhost:3001/tickets', {
+      const response = await fetch(apiPath('/tickets'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: adminHeaders(user),
         body: JSON.stringify({
-          userId: `guest_${Date.now()}`,
+          userId: `guest_${nowTs}`,
           userName: manualName,
           serviceId: manualService
         })
@@ -119,7 +133,7 @@ const AdminControlPage = () => {
     .slice(0, 10); 
 
   const getWaitTime = (createdAt) => {
-    const diff = Math.floor((Date.now() - new Date(createdAt)) / 60000);
+    const diff = Math.floor((nowTs - new Date(createdAt).getTime()) / 60000);
     return diff < 1 ? 'Just joined' : `${diff}m wait`;
   };
 
@@ -228,7 +242,6 @@ const AdminControlPage = () => {
 
             <div style={styles.ticketList}>
               {inProgressTickets.map(ticket => {
-                const service = services.find(s => s.id === ticket.service_id);
                 return (
                   <div key={ticket.id} className="glass-card" style={{ ...styles.ticketCard, borderLeft: '4px solid var(--primary)' }}>
                     <div style={styles.servingHeader}>
@@ -242,7 +255,7 @@ const AdminControlPage = () => {
                         </div>
                       </div>
                       <div style={styles.servingCounter}>
-                        <span style={styles.counterNum}>Counter {Math.floor(Math.random() * 8) + 1}</span>
+                        <span style={styles.counterNum}>Counter {(ticket.id % 8) + 1}</span>
                         <span style={styles.serveTime}>Serving: 04:12m</span>
                       </div>
                     </div>
@@ -306,7 +319,7 @@ const AdminControlPage = () => {
               <div style={styles.histFooter}>
                 <button 
                   style={styles.viewFullHistBtn}
-                  onClick={() => window.location.href = '/admin/analytics'}
+                  onClick={() => navigate('/admin/analytics')}
                 >
                   View Full History
                   <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_forward</span>

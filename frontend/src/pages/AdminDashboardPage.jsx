@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { useQueue } from '../context/QueueContext';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import AdminSidebar from '../components/AdminSidebar';
 import AdminTopBar from '../components/AdminTopBar';
+import { apiPath, adminHeaders } from '../config';
 
 const AdminDashboardPage = () => {
   const { user } = useAuth();
@@ -11,15 +11,15 @@ const AdminDashboardPage = () => {
   const [stats, setStats] = useState({ total_today: 0, active_services: 0, avg_wait: 0 });
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [nowTs, setNowTs] = useState(() => Date.now());
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const serviceParam = user?.serviceId ? `?serviceId=${user.serviceId}` : '';
       const [ticketsRes, servicesRes, statsRes] = await Promise.all([
-        fetch(`http://localhost:3001/tickets${serviceParam}`),
-        fetch(`http://localhost:3001/services`),
-        fetch(`http://localhost:3001/stats${serviceParam}`)
+        fetch(apiPath(`/tickets${serviceParam}`), { headers: adminHeaders(user) }),
+        fetch(apiPath('/services'), { headers: adminHeaders(user) }),
+        fetch(apiPath(`/stats${serviceParam}`), { headers: adminHeaders(user) })
       ]);
       
       if (ticketsRes.ok && servicesRes.ok && statsRes.ok) {
@@ -30,15 +30,15 @@ const AdminDashboardPage = () => {
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
     } finally {
-      setLoading(false);
+      // no-op
     }
-  };
+  }, [user]);
 
   const handleUpdateStatus = async (ticketId, status) => {
     try {
-      const response = await fetch(`http://localhost:3001/tickets/${ticketId}`, {
+      const response = await fetch(apiPath(`/tickets/${ticketId}`), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: adminHeaders(user),
         body: JSON.stringify({ status })
       });
       if (response.ok) fetchData();
@@ -48,15 +48,22 @@ const AdminDashboardPage = () => {
   };
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 10000);
-    return () => clearInterval(interval);
-  }, []);
+    const initialTimer = setTimeout(() => {
+      void fetchData();
+    }, 0);
+    const interval = setInterval(() => {
+      void fetchData();
+    }, 10000);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
+  }, [fetchData]);
 
-  // Stats calculation
-  const totalClientsToday = tickets.length;
-  const activeServicePoints = services.length;
-  const avgWaitTime = "14:20";
+  useEffect(() => {
+    const tick = setInterval(() => setNowTs(Date.now()), 60000);
+    return () => clearInterval(tick);
+  }, []);
 
   // Filtered tickets for the table
   const filteredTickets = tickets
@@ -73,9 +80,9 @@ const AdminDashboardPage = () => {
     
     if (waitingTickets.length > 0) {
       try {
-        const response = await fetch('http://localhost:3001/tickets/call-next', {
+        const response = await fetch(apiPath('/tickets/call-next'), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: adminHeaders(user),
           body: JSON.stringify({ serviceId: waitingTickets[0].service_id })
         });
         if (response.ok) {
@@ -240,7 +247,7 @@ const AdminDashboardPage = () => {
                 </thead>
                 <tbody>
                   {filteredTickets.map(ticket => {
-                    const timeAgo = Math.floor((Date.now() - new Date(ticket.created_at)) / 60000); // in minutes
+                    const timeAgo = Math.floor((nowTs - new Date(ticket.created_at).getTime()) / 60000); // in minutes
                     
                     return (
                       <tr key={ticket.id} style={styles.tableRow}>

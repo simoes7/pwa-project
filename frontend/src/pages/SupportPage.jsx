@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { apiPath } from '../config';
 
 const useWindowWidth = () => {
   const [width, setWidth] = useState(window.innerWidth);
@@ -20,21 +21,32 @@ const SupportPage = () => {
   const [supportForm, setSupportForm] = useState({ subject: '', message: '' });
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [adminRequests, setAdminRequests] = useState([]);
-  const [isAdminView, setIsAdminView] = useState(user?.role === 'admin');
+  const [isAdminView, setIsAdminView] = useState(false);
 
-  const fetchAdminRequests = async () => {
+  useEffect(() => {
+    if (user) {
+      setIsAdminView(user.role === 'admin');
+    }
+  }, [user]);
+
+  const fetchAdminRequests = useCallback(async () => {
     if (user?.role !== 'admin') return;
     try {
-      const response = await fetch(`http://localhost:3001/support${user.serviceId ? `?serviceId=${user.serviceId}` : ''}`);
+      const response = await fetch(apiPath(`/support${user.serviceId ? `?serviceId=${user.serviceId}` : ''}`));
       if (response.ok) setAdminRequests(await response.json());
     } catch (err) {
       console.error('Error fetching admin requests:', err);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
-    if (user?.role === 'admin') fetchAdminRequests();
-  }, [user]);
+    const initialTimer = setTimeout(() => {
+      if (user?.role === 'admin') {
+        void fetchAdminRequests();
+      }
+    }, 0);
+    return () => clearTimeout(initialTimer);
+  }, [user, fetchAdminRequests]);
   
   const width = useWindowWidth();
   const isMobile = width <= 1024;
@@ -43,7 +55,7 @@ const SupportPage = () => {
   useEffect(() => {
     const fetchFaqs = async () => {
       try {
-        const response = await fetch('http://localhost:3001/faqs');
+        const response = await fetch(apiPath('/faqs'));
         if (response.ok) {
           const data = await response.json();
           setFaqs(data);
@@ -60,12 +72,12 @@ const SupportPage = () => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const response = await fetch('http://localhost:3001/support', {
+      const response = await fetch(apiPath('/support'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: user?.id,
-          serviceId: user?.serviceId || 'bank', // Default for now
+          userId: user?.id || null,
+          serviceId: user?.serviceId || null,
           subject: supportForm.subject,
           message: supportForm.message
         })
@@ -335,22 +347,6 @@ const SupportPage = () => {
             </div>
           </section>
 
-          <nav className="glass-panel" style={dynamicStyles.bottomNav}>
-             <Link to="/" style={styles.navItemInactive}>
-              <span className="material-symbols-outlined">home</span>
-              <span style={styles.navText}>Home</span>
-            </Link>
-            <Link to="/ticket" style={styles.navItemInactive}>
-              <span className="material-symbols-outlined">confirmation_number</span>
-              <span style={styles.navText}>Ticket</span>
-            </Link>
-            <Link to="/support" style={styles.navItemActive}>
-              <div style={styles.activeIconCircle}>
-                <span className="material-symbols-outlined">help</span>
-              </div>
-              <span style={styles.navText}>Help</span>
-            </Link>
-          </nav>
         </main>
       )}
     </div>

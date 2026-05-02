@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import React, { createContext, useContext, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { INITIAL_SERVICES, INITIAL_TICKETS } from './mockData';
 
@@ -6,19 +7,29 @@ const QueueContext = createContext();
 
 export const useQueue = () => useContext(QueueContext);
 
+const getInitialServices = () => {
+  try {
+    const stored = localStorage.getItem('sq_services');
+    return stored ? JSON.parse(stored) : INITIAL_SERVICES;
+  } catch {
+    return INITIAL_SERVICES;
+  }
+};
+
+const getInitialTickets = () => {
+  try {
+    const stored = localStorage.getItem('sq_tickets');
+    return stored ? JSON.parse(stored) : INITIAL_TICKETS;
+  } catch {
+    return INITIAL_TICKETS;
+  }
+};
+
 export const QueueProvider = ({ children }) => {
   const { user } = useAuth();
-  const [services, setServices] = useState(INITIAL_SERVICES);
-  const [tickets, setTickets] = useState(INITIAL_TICKETS);
+  const [services, setServices] = useState(getInitialServices);
+  const [tickets, setTickets] = useState(getInitialTickets);
   const [queueError, setQueueError] = useState('');
-
-  // Load from local storage if available to persist between mock reloads
-  useEffect(() => {
-    const s = localStorage.getItem('sq_services');
-    const t = localStorage.getItem('sq_tickets');
-    if (s) setServices(JSON.parse(s));
-    if (t) setTickets(JSON.parse(t));
-  }, []);
 
   const persist = (newServices, newTickets) => {
     localStorage.setItem('sq_services', JSON.stringify(newServices));

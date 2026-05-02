@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
+import { apiPath, adminHeaders } from '../config';
 
 const AdminSidebar = ({ isOpen, setIsOpen }) => {
   const { user, logout } = useAuth();
@@ -12,13 +13,13 @@ const AdminSidebar = ({ isOpen, setIsOpen }) => {
     const fetchBrand = async () => {
       if (!user?.serviceId) return;
       try {
-        const res = await fetch(`http://localhost:3001/settings?serviceId=${user.serviceId}`);
+        const res = await fetch(apiPath(`/settings?serviceId=${user.serviceId}`), { headers: adminHeaders(user) });
         if (res.ok) {
           const data = await res.json();
           const nameSetting = data.find(s => s.setting_key === 'business_name');
           if (nameSetting) setBusinessName(nameSetting.setting_value);
         }
-      } catch (err) { /* ignore */ }
+      } catch { /* ignore */ }
     };
     fetchBrand();
   }, [user]);

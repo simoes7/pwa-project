@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import AdminSidebar from '../components/AdminSidebar';
 import AdminTopBar from '../components/AdminTopBar';
+import { apiPath, adminHeaders } from '../config';
 
 const AdminSettingsPage = () => {
   const { user } = useAuth();
@@ -11,17 +12,16 @@ const AdminSettingsPage = () => {
 
   const [emailEnabled, setEmailEnabled] = useState(true);
   const [smsEnabled, setSmsEnabled] = useState(false);
-  const [loading, setLoading] = useState(true);
   
   // New persistent states
   const [businessName, setBusinessName] = useState('Smart Queue');
   const [gracePeriod, setGracePeriod] = useState(10);
   const [maxCapacity, setMaxCapacity] = useState(100);
 
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     if (!user?.serviceId) return;
     try {
-      const response = await fetch(`http://localhost:3001/settings?serviceId=${user.serviceId}`);
+      const response = await fetch(apiPath(`/settings?serviceId=${user.serviceId}`), { headers: adminHeaders(user) });
       if (response.ok) {
         const data = await response.json();
         data.forEach(s => {
@@ -33,13 +33,13 @@ const AdminSettingsPage = () => {
     } catch (err) {
       console.error('Error fetching settings:', err);
     } finally {
-      setLoading(false);
+      // no-op
     }
-  };
+  }, [user]);
 
   React.useEffect(() => {
     fetchSettings();
-  }, [user]);
+  }, [fetchSettings]);
 
   const handleSave = async () => {
     const settings = [
@@ -50,9 +50,9 @@ const AdminSettingsPage = () => {
 
     try {
       await Promise.all(settings.map(s => 
-        fetch('http://localhost:3001/settings', {
+        fetch(apiPath('/settings'), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: adminHeaders(user),
           body: JSON.stringify({ serviceId: user.serviceId, ...s })
         })
       ));

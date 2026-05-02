@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Logo from '../components/Logo';
+import { apiPath } from '../config';
 
 const useWindowWidth = () => {
   const [width, setWidth] = useState(window.innerWidth);
@@ -14,21 +15,19 @@ const useWindowWidth = () => {
 
 const LandingPage = () => {
   const width = useWindowWidth();
-  const isMobile = width <= 768;
-  const isTablet = width <= 1024;
+  const isMobile = width <= 1024;
 
-  const [stats, setStats] = useState({ total_tickets: '15M+', total_venues: '1.2k' });
+  const [stats, setStats] = useState({ total_today: '15M+', active_services: '1.2k' });
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch('http://localhost:3001/stats');
+        const response = await fetch(apiPath('/stats'));
         if (response.ok) {
           const data = await response.json();
-          // Use real data, fallback to dummy data if DB returns 0 (since it's a new DB)
           setStats({
-            total_tickets: data.total_tickets > 0 ? data.total_tickets : '15M+',
-            total_venues: data.total_venues > 0 ? data.total_venues : '1.2k'
+            total_today: data.total_today > 0 ? data.total_today : '15M+',
+            active_services: data.active_services > 0 ? data.active_services : '1.2k'
           });
         }
       } catch (error) {
@@ -39,6 +38,10 @@ const LandingPage = () => {
   }, []);
 
   const dynamicStyles = {
+    page: {
+      ...styles.page,
+      paddingBottom: isMobile ? '6rem' : 0
+    },
     heroSection: {
       ...styles.heroSection,
       padding: isMobile ? '4rem 1.5rem' : '6rem 2rem',
@@ -124,7 +127,7 @@ const LandingPage = () => {
   };
 
   return (
-    <div style={styles.page}>
+    <div style={dynamicStyles.page}>
       
       {/* Hero Section */}
       <section style={dynamicStyles.heroSection}>
@@ -198,18 +201,18 @@ const LandingPage = () => {
       {/* Stats Section */}
       <section className="bg-surface-low" style={styles.statsSection}>
         <div style={dynamicStyles.statsInner}>
-          <div style={styles.statItem}>
-            <div style={{ ...dynamicStyles.statNum, color: 'var(--primary)' }}>{stats.total_tickets}</div>
-            <div style={styles.statLabel}>Tickets Issued</div>
-          </div>
-          <div style={styles.statItem}>
-            <div style={{ ...dynamicStyles.statNum, color: 'var(--secondary)' }}>45%</div>
-            <div style={styles.statLabel}>Time Saved</div>
-          </div>
-          <div style={styles.statItem}>
-            <div style={{ ...dynamicStyles.statNum, color: 'var(--tertiary)' }}>{stats.total_venues}</div>
-            <div style={styles.statLabel}>Active Venues</div>
-          </div>
+            <div style={styles.statItem}>
+              <div style={{ ...dynamicStyles.statNum, color: 'var(--primary)' }}>{stats.total_today}</div>
+              <div style={styles.statLabel}>Tickets Issued</div>
+            </div>
+            <div style={styles.statItem}>
+              <div style={{ ...dynamicStyles.statNum, color: 'var(--secondary)' }}>45%</div>
+              <div style={styles.statLabel}>Time Saved</div>
+            </div>
+            <div style={styles.statItem}>
+              <div style={{ ...dynamicStyles.statNum, color: 'var(--tertiary)' }}>{stats.active_services}</div>
+              <div style={styles.statLabel}>Active Venues</div>
+            </div>
           <div style={styles.statItem}>
             <div style={{ ...dynamicStyles.statNum, color: 'var(--on-surface)' }}>4.9/5</div>
             <div style={styles.statLabel}>User Rating</div>
@@ -331,7 +334,7 @@ const LandingPage = () => {
 const styles = {
   page: {
     paddingTop: '80px',
-    overflowX: 'hidden'
+    minHeight: '100vh'
   },
   heroSection: {
     maxWidth: '1280px',
@@ -701,6 +704,42 @@ const styles = {
     backgroundColor: 'rgba(116, 47, 229, 0.15)',
     borderRadius: '50%',
     filter: 'blur(100px)'
+  },
+  bottomNav: {
+    display: 'flex',
+    position: 'fixed',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '5rem',
+    borderTop: '1px solid var(--surface-container-low)',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    zIndex: 100,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backdropFilter: 'blur(20px)',
+    borderRadius: '0'
+  },
+  navItemInactive: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '0.25rem',
+    color: '#64748b',
+    textDecoration: 'none'
+  },
+  navItemActive: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '0.25rem',
+    color: 'var(--primary)',
+    textDecoration: 'none'
+  },
+  navText: {
+    fontSize: '0.625rem',
+    fontWeight: '800',
+    textTransform: 'uppercase'
   }
 };
 

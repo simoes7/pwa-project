@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import AdminSidebar from '../components/AdminSidebar';
 import AdminTopBar from '../components/AdminTopBar';
+import { apiPath, adminHeaders } from '../config';
 
 // Scoped styles for analytics chart
 const analyticsStyles = `
@@ -52,35 +53,36 @@ const AdminAnalyticsPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [range, setRange] = useState('24h');
-  const [services, setServices] = useState([]);
   const [data, setData] = useState({
     hourly: [],
     metrics: { total_throughput: 0, avg_duration: 0, total_feedback: 0, avg_rating: 0 }
   });
-  const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const serviceParam = user?.serviceId ? `&serviceId=${user.serviceId}` : '';
       const [analyticsRes, servicesRes] = await Promise.all([
-        fetch(`http://localhost:3001/analytics?range=${range}${serviceParam}`),
-        fetch(`http://localhost:3001/services`)
+        fetch(apiPath(`/analytics?range=${range}${serviceParam}`), { headers: adminHeaders(user) }),
+        fetch(apiPath('/services'), { headers: adminHeaders(user) })
       ]);
       
       if (analyticsRes.ok && servicesRes.ok) {
         setData(await analyticsRes.json());
-        setServices(await servicesRes.json());
+        await servicesRes.json();
       }
     } catch (err) {
       console.error('Error fetching analytics:', err);
     } finally {
-      setLoading(false);
+      // no-op
     }
-  };
+  }, [range, user]);
 
   useEffect(() => {
-    fetchData();
-  }, [range, user?.serviceId]);
+    const initialTimer = setTimeout(() => {
+      void fetchData();
+    }, 0);
+    return () => clearTimeout(initialTimer);
+  }, [fetchData]);
 
   const handleExport = () => {
     const csvRows = [

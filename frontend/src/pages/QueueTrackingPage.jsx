@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useQueue } from '../context/QueueContext';
-import Card from '../components/Card';
 import Badge from '../components/Badge';
 import { Clock } from 'lucide-react';
+import { apiPath } from '../config';
 
 const useWindowWidth = () => {
   const [width, setWidth] = useState(window.innerWidth);
@@ -15,18 +14,41 @@ const useWindowWidth = () => {
 };
 
 const QueueTrackingPage = () => {
-  const { tickets, services } = useQueue();
+  const [tickets, setTickets] = useState([]);
+  const [services, setServices] = useState([]);
   const width = useWindowWidth();
   const isMobile = width <= 1024;
   const isSmallMobile = width <= 640;
 
+  useEffect(() => {
+    const fetchQueueData = async () => {
+      try {
+        const [ticketsRes, servicesRes] = await Promise.all([
+          fetch(apiPath('/queue-live')),
+          fetch(apiPath('/services')),
+        ]);
+        if (ticketsRes.ok && servicesRes.ok) {
+          setTickets(await ticketsRes.json());
+          setServices(await servicesRes.json());
+        }
+      } catch (error) {
+        console.error('Error loading queue tracking data:', error);
+      }
+    };
+
+    fetchQueueData();
+    const interval = setInterval(fetchQueueData, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Sort queue
-  const activeTickets = tickets.filter(t => ['waiting', 'called'].includes(t.status))
-                               .sort((a, b) => a.createdAt - b.createdAt);
+  const activeTickets = tickets
+    .filter((t) => ['waiting', 'called'].includes(t.status))
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   
   // Assuming bank is main queue for mockup
-  const mainService = services.find(s => s.id === 'bank') || services[0];
-  const calledInMain = activeTickets.find(t => t.serviceId === mainService?.id && t.status === 'called');
+  const mainService = services.find((s) => s.id === 'bank') || services[0];
+  const calledInMain = activeTickets.find((t) => t.service_id === mainService?.id && t.status === 'called');
 
   const dynamicStyles = {
     header: {
@@ -92,7 +114,7 @@ const QueueTrackingPage = () => {
           </div>
           
           <div style={dynamicStyles.largeNumber}>
-            {calledInMain ? calledInMain.number : `${mainService?.prefix}-${mainService?.currentServing}`}
+            {calledInMain ? `T-${String(calledInMain.id).padStart(3, '0')}` : '--'}
           </div>
 
           <div style={styles.agentTag}>
@@ -140,10 +162,10 @@ const QueueTrackingPage = () => {
       <div style={styles.upcomingSection}>
         <h3 style={{fontSize: '1.25rem', color: 'var(--accent)', marginBottom: '1.5rem'}}>Upcoming Tickets</h3>
         <div style={styles.horizontalList}>
-          {activeTickets.filter(t => t.status === 'waiting').slice(0,4).map((ticket, i) => (
+          {activeTickets.filter((t) => t.status === 'waiting').slice(0, 4).map((ticket, i) => (
             <div key={ticket.id} className="glass-card" style={styles.pillCard}>
               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem'}}>
-                <span style={{fontSize: '1.5rem', fontWeight: 800, color: 'var(--accent)'}}>{ticket.number}</span>
+                <span style={{fontSize: '1.5rem', fontWeight: 800, color: 'var(--accent)'}}>{`T-${String(ticket.id).padStart(3, '0')}`}</span>
                 <Badge status={i === 2 ? 'priority' : 'pending'} style={{padding: '0.2rem 0.5rem', fontSize: '0.6rem'}} />
               </div>
               <span style={{fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500}}>Wait Time: ~{(i+1)*5}m</span>

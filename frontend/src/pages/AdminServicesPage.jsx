@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import AdminSidebar from '../components/AdminSidebar';
 import AdminTopBar from '../components/AdminTopBar';
+import { apiPath, adminHeaders } from '../config';
 
 const AdminServicesPage = () => {
   const { user } = useAuth();
@@ -9,14 +10,13 @@ const AdminServicesPage = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [servicePoints, setServicePoints] = useState([]);
   const [tickets, setTickets] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!user?.serviceId) return;
     try {
       const [spRes, ticketsRes] = await Promise.all([
-        fetch(`http://localhost:3001/service-points?serviceId=${user.serviceId}`),
-        fetch(`http://localhost:3001/tickets?serviceId=${user.serviceId}`)
+        fetch(apiPath(`/service-points?serviceId=${user.serviceId}`), { headers: adminHeaders(user) }),
+        fetch(apiPath(`/tickets?serviceId=${user.serviceId}`), { headers: adminHeaders(user) })
       ]);
       if (spRes.ok && ticketsRes.ok) {
         setServicePoints(await spRes.json());
@@ -25,15 +25,22 @@ const AdminServicesPage = () => {
     } catch (err) {
       console.error('Error fetching service points:', err);
     } finally {
-      setLoading(false);
+      // no-op
     }
-  };
+  }, [user]);
 
   React.useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 10000);
-    return () => clearInterval(interval);
-  }, [user]);
+    const initialTimer = setTimeout(() => {
+      void fetchData();
+    }, 0);
+    const interval = setInterval(() => {
+      void fetchData();
+    }, 10000);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
+  }, [fetchData]);
 
   const handleAddDesk = async () => {
     const name = prompt("Enter desk name (e.g., Counter 4):");
@@ -41,9 +48,9 @@ const AdminServicesPage = () => {
     if (!name || !staff) return;
 
     try {
-      const res = await fetch('http://localhost:3001/service-points', {
+      const res = await fetch(apiPath('/service-points'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: adminHeaders(user),
         body: JSON.stringify({ serviceId: user.serviceId, name, staffName: staff })
       });
       if (res.ok) fetchData();
