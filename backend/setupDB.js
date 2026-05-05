@@ -155,6 +155,7 @@ const queries = [
     \`setting_value\` text         DEFAULT NULL,
     PRIMARY KEY (\`id\`),
     KEY \`service_id\` (\`service_id\`),
+    UNIQUE KEY \`unique_service_setting\` (\`service_id\`, \`setting_key\`),
     CONSTRAINT \`settings_ibfk_1\` FOREIGN KEY (\`service_id\`) REFERENCES \`services\` (\`id\`)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
 ];

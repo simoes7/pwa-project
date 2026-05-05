@@ -84,26 +84,47 @@ const TicketPage = () => {
   };
 
   const [remainingInFront, setRemainingInFront] = useState(0);
+  const [etaTime, setEtaTime] = useState(null);
+  const [etaSeconds, setEtaSeconds] = useState(0);
+  const [isDelayed, setIsDelayed] = useState(false);
+  const [showDelayMessage, setShowDelayMessage] = useState(false);
+  const [showApproachingMessage, setShowApproachingMessage] = useState(false);
+  const [avgServiceTime, setAvgServiceTime] = useState(10);
 
   // We show the first active ticket
   const ticket = tickets.length > 0 ? tickets[0] : null;
   const activeTicketId = ticket?.id;
 
   useEffect(() => {
-    const fetchQueuePosition = async () => {
+    const fetchETA = async () => {
       if (!activeTicketId) return;
       try {
-        const res = await fetch(apiPath(`/tickets/position/${activeTicketId}`));
+        const res = await fetch(apiPath(`/tickets/${activeTicketId}/eta`));
         if (res.ok) {
           const data = await res.json();
           setRemainingInFront(data.position || 0);
+          setEtaTime(data.eta);
+          setEtaSeconds(data.eta_seconds || 0);
+          setIsDelayed(data.is_delayed || false);
+          setShowDelayMessage(data.show_delay_message || false);
+          setShowApproachingMessage(data.show_approaching_message || false);
+          setAvgServiceTime(data.avg_service_time || 10);
         }
       } catch (err) { console.error(err); }
     };
-    fetchQueuePosition();
-    const interval = setInterval(fetchQueuePosition, 10000); // Update every 10s
+    fetchETA();
+    const interval = setInterval(fetchETA, 10000); // Sync every 10s
     return () => clearInterval(interval);
   }, [activeTicketId]);
+
+  // Local Countdown Timer (Seconds precision)
+  useEffect(() => {
+    if (etaSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setEtaSeconds(prev => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [etaSeconds]);
 
   const width = useWindowWidth();
   const isMobile = width <= 768;
@@ -128,10 +149,41 @@ const TicketPage = () => {
   const prefix = ticket.ticket_prefix || 'T';
   const queueNum = ticket.queue_number || ticket.id;
   const ticketNumStr = `${prefix}-${String(queueNum).padStart(2, '0')}`;
-  
+
   const progressPercent = ticket.status === 'called' ? 100 : Math.min(95, Math.max(5, 100 - (remainingInFront * 15)));
-  const waitTimePerPerson = ticket.estimated_wait_time || 5;
-  const waitTime = remainingInFront * waitTimePerPerson;
+  
+  const formatETA = () => {
+    if (ticket.status === 'called') return 'NOW';
+    if (etaSeconds <= 0) return 'Calculating...';
+    
+    if (etaSeconds < 3600) {
+      const mins = Math.floor(etaSeconds / 60);
+      const secs = etaSeconds % 60;
+      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    
+    const date = new Date(Date.now() + etaSeconds * 1000);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const getTimerColor = () => {
+    if (isDelayed) return '#ef4444'; // Red
+    if (etaSeconds < 300) return '#f59e0b'; // Orange (under 5 mins)
+    return 'var(--primary)'; // Blue/Green
+  };
+
+  const createdDate = new Date(ticket.created_at || Date.now());
+  const ticketDateStr = createdDate.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+  const exactTimeStr = createdDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: true });
+  const turnPeriod = createdDate.getHours() < 12 ? 'Morning' : 'Afternoon';
+  
+  const usageTimeStr = etaTime ? new Date(etaTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: true }) : 'Calculating...';
+  
+  const expirationDate = new Date(createdDate);
+  expirationDate.setHours(23, 59, 59, 999);
+  const expirationDateStr = expirationDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) + ' 11:59 PM';
+  
+  const qrValue = `ticket-${ticket.id}-${ticketNumStr}`;
 
   const dynamicStyles = {
     main: {
@@ -166,7 +218,7 @@ const TicketPage = () => {
   return (
     <div style={styles.container}>
       <main style={dynamicStyles.main}>
-        
+
         {/* Background Blurs */}
         <div style={styles.blurTop}></div>
         <div style={styles.blurBottom}></div>
@@ -210,23 +262,45 @@ const TicketPage = () => {
           </div>
         )}
 
-        {/* Notification Toast — only show when no action message */}
-        {!actionMessage && (
+        {/* Delay Notification (Only for Waiting) */}
+        {showDelayMessage && (
           <div style={styles.toastContainer}>
-            <div className="glass-panel" style={{ ...styles.toast, ...(ticket.status === 'called' ? styles.toastCalled : {}) }}>
-              <span className="material-symbols-outlined" style={{ color: ticket.status === 'called' ? 'white' : 'var(--primary)', fontVariationSettings: "'FILL' 1" }}>
-                {ticket.status === 'called' ? 'notifications_active' : ticket.status === 'paused' ? 'hourglass_top' : 'info'}
+            <div className="glass-panel" style={{ ...styles.toast, backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444' }}>
+              <span className="material-symbols-outlined" style={{ color: '#ef4444', fontVariationSettings: "'FILL' 1" }}>warning</span>
+              <span style={{ ...styles.toastText, color: '#b91c1c' }}>
+                Your turn is approaching. We are currently experiencing a slight delay. Thank you for your patience.
               </span>
-              <span style={{ ...styles.toastText, color: ticket.status === 'called' ? 'white' : 'var(--on-primary-container)' }}>
-                {ticket.status === 'called'
-                  ? 'Your number has been called — go to the counter!'
-                  : ticket.status === 'paused'
-                    ? `Position held — ${remainingInFront} ahead when you resume`
-                    : remainingInFront === 0
-                      ? "You're next!"
-                      : isSmallMobile
-                        ? `${remainingInFront} people ahead`
-                        : `${remainingInFront} ${remainingInFront === 1 ? 'person' : 'people'} ahead of you.`}
+            </div>
+          </div>
+        )}
+
+        {/* Approaching Notification (Only for Waiting) */}
+        {showApproachingMessage && !showDelayMessage && (
+          <div style={styles.toastContainer}>
+            <div className="glass-panel" style={{ ...styles.toast, backgroundColor: 'rgba(0, 85, 215, 0.08)', border: '1px solid var(--primary)' }}>
+              <span className="material-symbols-outlined" style={{ color: 'var(--primary)', fontVariationSettings: "'FILL' 1" }}>notification_important</span>
+              <span style={{ ...styles.toastText, color: 'var(--on-primary-container)' }}>
+                You're almost there! Only {remainingInFront} {remainingInFront === 1 ? 'person' : 'people'} ahead.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Notification Toast — only show when no action message and not being served */}
+        {!actionMessage && !showDelayMessage && !showApproachingMessage && ticket.status !== 'called' && (
+          <div style={styles.toastContainer}>
+            <div className="glass-panel" style={{ ...styles.toast }}>
+              <span className="material-symbols-outlined" style={{ color: 'var(--primary)', fontVariationSettings: "'FILL' 1" }}>
+                {ticket.status === 'paused' ? 'hourglass_top' : 'info'}
+              </span>
+              <span style={{ ...styles.toastText, color: 'var(--on-primary-container)' }}>
+                {ticket.status === 'paused'
+                  ? `Position held — ${remainingInFront} ahead when you resume`
+                  : remainingInFront === 0
+                    ? "You're next!"
+                    : isSmallMobile
+                      ? `${remainingInFront} people ahead`
+                      : `${remainingInFront} ${remainingInFront === 1 ? 'person' : 'people'} ahead of you.`}
               </span>
             </div>
           </div>
@@ -256,10 +330,9 @@ const TicketPage = () => {
           {/* Bento Stats */}
           <div style={styles.statsGrid}>
             <div style={styles.statBox}>
-              <p style={styles.statLabel}>ESTIMATED WAIT TIME</p>
+              <p style={styles.statLabel}>ESTIMATED TURN TIME</p>
               <div style={styles.statValueRow}>
-                <span className="headline" style={{ ...styles.statNum, color: 'var(--primary)', fontSize: isSmallMobile ? '2.5rem' : '3.5rem' }}>{waitTime}</span>
-                <span style={styles.statUnit}>minutes</span>
+                <span className="headline" style={{ ...styles.statNum, color: getTimerColor(), fontSize: isSmallMobile ? '1.5rem' : '2.5rem' }}>{formatETA()}</span>
               </div>
             </div>
             <div style={styles.statBox}>
@@ -268,6 +341,31 @@ const TicketPage = () => {
                 <span className="headline" style={{ ...styles.statNum, color: 'var(--secondary)', fontSize: isSmallMobile ? '2.5rem' : '3.5rem' }}>{String(remainingInFront).padStart(2, '0')}</span>
                 <span style={styles.statUnit}>ahead</span>
               </div>
+            </div>
+          </div>
+
+          {/* Ticket Details with QR Code */}
+          <div style={styles.ticketDetails}>
+            <div style={styles.detailsGrid}>
+              <div style={styles.detailItem}>
+                <span style={styles.detailLabel}>Ticket Date</span>
+                <span style={styles.detailValue}>{ticketDateStr}</span>
+              </div>
+              <div style={styles.detailItem}>
+                <span style={styles.detailLabel}>Exact Time</span>
+                <span style={styles.detailValue}>{exactTimeStr} ({turnPeriod})</span>
+              </div>
+              <div style={styles.detailItem}>
+                <span style={styles.detailLabel}>Usage Time (ETA)</span>
+                <span style={styles.detailValue}>{usageTimeStr}</span>
+              </div>
+              <div style={styles.detailItem}>
+                <span style={styles.detailLabel}>Expiration Date</span>
+                <span style={styles.detailValue}>{expirationDateStr}</span>
+              </div>
+            </div>
+            <div style={styles.qrContainer}>
+              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${encodeURIComponent(qrValue)}`} alt="Ticket QR Code" style={{ width: 90, height: 90 }} />
             </div>
           </div>
 
@@ -312,7 +410,7 @@ const TicketPage = () => {
 
           {/* Action Row */}
           <div style={styles.actionRow}>
-            <button 
+            <button
               onClick={() => ticket.status === 'paused' ? updateTicketStatus(ticket.id, 'waiting') : updateTicketStatus(ticket.id, 'paused')}
               disabled={ticket.status === 'called'}
               style={{
@@ -324,7 +422,7 @@ const TicketPage = () => {
               <span className="hide-mobile">{ticket.status === 'paused' ? 'Resume Ticket' : ticket.status === 'called' ? 'Cannot Pause' : 'Pause Ticket'}</span>
               <span className="show-mobile">{ticket.status === 'paused' ? 'Resume' : ticket.status === 'called' ? 'Called' : 'Pause'}</span>
             </button>
-            <button 
+            <button
               onClick={() => updateTicketStatus(ticket.id, 'cancelled')}
               disabled={ticket.status === 'called'}
               style={{
@@ -342,9 +440,9 @@ const TicketPage = () => {
         {/* Location Card */}
         <div className="glass-panel" style={styles.locationCard}>
           <div style={styles.locationLeft}>
-            <img 
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDoMnA2lzJ5LXRmGfq3W2XY_HIHuFk98YvXv2uLOfTjs-TpjGx1YFYwC4pE8eVAUoh_1Awqt5DVBeW_750lsj9NsE7LDcOQsP---1IRGbBv-5Ja-RDAfrmrsFo2uWXr_KsQ0wsOwzG5gtiR6NUtVrf--FvBFoSh67jRXRhAV1YbFhtPBLDcLwsSxdGzlFUjRRpmSaOvhF-6yUEBqYBjO-WB0GhZ6X05LMQaC5lZN0_gFnWF_jS8ObFHu4B1yOu3icp_J5pJbW_glMwY" 
-              alt="Map" 
+            <img
+              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDoMnA2lzJ5LXRmGfq3W2XY_HIHuFk98YvXv2uLOfTjs-TpjGx1YFYwC4pE8eVAUoh_1Awqt5DVBeW_750lsj9NsE7LDcOQsP---1IRGbBv-5Ja-RDAfrmrsFo2uWXr_KsQ0wsOwzG5gtiR6NUtVrf--FvBFoSh67jRXRhAV1YbFhtPBLDcLwsSxdGzlFUjRRpmSaOvhF-6yUEBqYBjO-WB0GhZ6X05LMQaC5lZN0_gFnWF_jS8ObFHu4B1yOu3icp_J5pJbW_glMwY"
+              alt="Map"
               style={styles.miniMap}
             />
             <div>
@@ -578,6 +676,50 @@ const styles = {
     fontSize: '1.25rem',
     fontWeight: '500',
     color: 'var(--on-surface-variant)'
+  },
+  ticketDetails: {
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'var(--surface-container-low)',
+    padding: '1.5rem',
+    borderRadius: '1rem',
+    marginBottom: '3rem',
+    flexWrap: 'wrap',
+    gap: '1.5rem'
+  },
+  detailsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+    gap: '1.25rem',
+    flex: 1
+  },
+  detailItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.25rem'
+  },
+  detailLabel: {
+    fontSize: '0.7rem',
+    fontWeight: '800',
+    color: 'var(--on-surface-variant)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em'
+  },
+  detailValue: {
+    fontSize: '0.9rem',
+    fontWeight: '700',
+    color: 'var(--on-surface)'
+  },
+  qrContainer: {
+    backgroundColor: 'white',
+    padding: '0.5rem',
+    borderRadius: '0.5rem',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
   },
   progressSection: {
     marginBottom: '3rem'

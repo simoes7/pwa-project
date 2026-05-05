@@ -1,0 +1,34 @@
+{
+  "common": {
+    "dashboard": "Dashboard",
+    "services": "Services",
+    "users": "Users",
+    "analytics": "Analytics",
+    "settings": "Settings",
+    "logout": "Logout",
+    "login": "Login",
+    "register": "Register",
+    "create": "Create",
+    "update": "Update",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "save": "Save",
+    "search": "Search",
+    "actions": "Actions",
+    "status": "Status",
+    "active": "Active",
+    "offline": "Offline",
+    "online": "Online"
+  },
+  "superAdmin": {
+    "title": "Super Admin Central",
+    "subtitle": "Manage global services and administrative accounts.",
+    "manageServices": "Manage Services",
+    "adminAccounts": "Admin Accounts",
+    "addService": "Add New Service",
+    "createAdmin": "Create Admin Account",
+    "admin": "Administrator",
+    "role": "Role",
+    "assignedService": "Assigned Service"
+  }
+}

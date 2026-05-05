@@ -26,7 +26,9 @@ const LoginPage = () => {
     e.preventDefault();
     const user = await login(email, password);
     if (user) {
-      if (user.role === 'admin') {
+      if (user.role === 'super_admin') {
+        navigate('/super-admin');
+      } else if (user.role === 'admin') {
         navigate('/admin');
       } else {
         navigate('/');

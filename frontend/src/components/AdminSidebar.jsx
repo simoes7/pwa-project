@@ -41,8 +41,8 @@ const AdminSidebar = ({ isOpen, setIsOpen }) => {
   };
 
   return (
-    <aside 
-      className={`admin-sidebar ${isOpen ? 'open' : ''}`} 
+    <aside
+      className={`admin-sidebar ${isOpen ? 'open' : ''}`}
       style={styles.sidebar}
     >
       <div style={styles.sidebarBrand}>
@@ -54,8 +54,8 @@ const AdminSidebar = ({ isOpen, setIsOpen }) => {
               <p style={styles.brandSubtitle}>Central Hub</p>
             </div>
           </div>
-          <button 
-            className="show-mobile" 
+          <button
+            className="show-mobile"
             style={styles.closeBtn}
             onClick={() => setIsOpen(false)}
           >
@@ -66,7 +66,7 @@ const AdminSidebar = ({ isOpen, setIsOpen }) => {
 
       <nav style={styles.sidebarNav}>
         {navItems.map(item => (
-          <Link 
+          <Link
             key={item.id}
             to={item.path}
             style={isActive(item.path) ? styles.navLinkActive : styles.navLink}
@@ -83,17 +83,17 @@ const AdminSidebar = ({ isOpen, setIsOpen }) => {
           <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>add</span>
           <span className="hide-tablet">New Service Point</span>
         </button>
-        
+
         <Link to="/support" style={styles.footerLink} onClick={handleLinkClick}>
           <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>help</span>
           <span>Support</span>
         </Link>
-        
+
         <div style={styles.adminProfile}>
           <div style={styles.avatarWrap}>
-            <img 
-              src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150&h=150&auto=format&fit=crop" 
-              alt="Profile" 
+            <img
+              src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150&h=150&auto=format&fit=crop"
+              alt="Profile"
               style={styles.avatarImg}
             />
           </div>
@@ -102,7 +102,7 @@ const AdminSidebar = ({ isOpen, setIsOpen }) => {
             <p style={styles.adminRole}>Systems Head</p>
           </div>
           <button onClick={logout} style={styles.logoutBtn}>
-             <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>logout</span>
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>logout</span>
           </button>
         </div>
       </div>

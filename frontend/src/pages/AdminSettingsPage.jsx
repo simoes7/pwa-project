@@ -5,35 +5,87 @@ import AdminTopBar from '../components/AdminTopBar';
 import { apiPath, adminHeaders } from '../config';
 
 const AdminSettingsPage = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSection, setActiveSection] = useState('general');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [emailEnabled, setEmailEnabled] = useState(true);
   const [smsEnabled, setSmsEnabled] = useState(false);
-  
+  const [serviceCategory, setServiceCategory] = useState('Healthcare');
+
   // New persistent states
   const [businessName, setBusinessName] = useState('Smart Queue');
   const [gracePeriod, setGracePeriod] = useState(10);
   const [maxCapacity, setMaxCapacity] = useState(100);
+  const [estimatedWaitTime, setEstimatedWaitTime] = useState(10);
+  const [isOpen, setIsOpen] = useState(true);
+  const [isFastTrackAvailable, setIsFastTrackAvailable] = useState(false);
+
+  const defaultSchedule = [
+    { day_of_week: 1, morning_open: '08:00', morning_close: '12:00', afternoon_open: '14:00', afternoon_close: '18:00', is_closed: false },
+    { day_of_week: 2, morning_open: '08:00', morning_close: '12:00', afternoon_open: '14:00', afternoon_close: '18:00', is_closed: false },
+    { day_of_week: 3, morning_open: '08:00', morning_close: '12:00', afternoon_open: '14:00', afternoon_close: '18:00', is_closed: false },
+    { day_of_week: 4, morning_open: '08:00', morning_close: '12:00', afternoon_open: '14:00', afternoon_close: '18:00', is_closed: false },
+    { day_of_week: 5, morning_open: '08:00', morning_close: '12:00', afternoon_open: '14:00', afternoon_close: '18:00', is_closed: false },
+    { day_of_week: 6, morning_open: '09:00', morning_close: '14:00', afternoon_open: '', afternoon_close: '', is_closed: false },
+    { day_of_week: 7, morning_open: '', morning_close: '', afternoon_open: '', afternoon_close: '', is_closed: true }
+  ];
+  const [schedules, setSchedules] = useState(defaultSchedule);
+
+  const handleScheduleChange = (day, field, value) => {
+    setSchedules(prev => prev.map(s => s.day_of_week === day ? { ...s, [field]: value } : s));
+  };
 
   const fetchSettings = useCallback(async () => {
     if (!user?.serviceId) return;
     try {
-      const response = await fetch(apiPath(`/settings?serviceId=${user.serviceId}`), { headers: adminHeaders(user) });
+      const response = await fetch(apiPath(`/settings?serviceId=${user.serviceId}`), { headers: adminHeaders(user, token) });
       if (response.ok) {
         const data = await response.json();
         data.forEach(s => {
           if (s.setting_key === 'business_name') setBusinessName(s.setting_value);
           if (s.setting_key === 'grace_period') setGracePeriod(parseInt(s.setting_value));
-          if (s.setting_key === 'max_capacity') setMaxCapacity(parseInt(s.setting_value));
+          if (s.setting_key === 'service_category') setServiceCategory(s.setting_value);
+          if (s.setting_key === 'sms_enabled') setSmsEnabled(s.setting_value === 'true');
+          if (s.setting_key === 'email_enabled') setEmailEnabled(s.setting_value === 'true');
         });
+      }
+
+      const servicesRes = await fetch(apiPath('/services'));
+      if (servicesRes.ok) {
+        const services = await servicesRes.json();
+        const myService = services.find(s => s.id === user.serviceId);
+        if (myService) {
+          setMaxCapacity(myService.max_capacity || 100);
+          setEstimatedWaitTime(myService.estimated_wait_time || 10);
+          setIsOpen(!!myService.is_open);
+          setIsFastTrackAvailable(!!myService.is_fast_track_available);
+        }
+      }
+
+      const schedulesRes = await fetch(apiPath(`/services/${user.serviceId}/schedules`));
+      if (schedulesRes.ok) {
+        const schedData = await schedulesRes.json();
+        if (schedData && schedData.length > 0) {
+          setSchedules(prev => prev.map(p => {
+             const existing = schedData.find(s => s.day_of_week === p.day_of_week);
+             if (existing) {
+               return {
+                 ...p,
+                 morning_open: existing.morning_open ? existing.morning_open.substring(0, 5) : '',
+                 morning_close: existing.morning_close ? existing.morning_close.substring(0, 5) : '',
+                 afternoon_open: existing.afternoon_open ? existing.afternoon_open.substring(0, 5) : '',
+                 afternoon_close: existing.afternoon_close ? existing.afternoon_close.substring(0, 5) : '',
+                 is_closed: !!existing.is_closed
+               };
+             }
+             return p;
+          }));
+        }
       }
     } catch (err) {
       console.error('Error fetching settings:', err);
-    } finally {
-      // no-op
     }
   }, [user]);
 
@@ -45,17 +97,37 @@ const AdminSettingsPage = () => {
     const settings = [
       { key: 'business_name', value: businessName },
       { key: 'grace_period', value: gracePeriod },
-      { key: 'max_capacity', value: maxCapacity }
+      { key: 'service_category', value: serviceCategory },
+      { key: 'sms_enabled', value: smsEnabled.toString() },
+      { key: 'email_enabled', value: emailEnabled.toString() }
     ];
 
     try {
-      await Promise.all(settings.map(s => 
+      await Promise.all(settings.map(s =>
         fetch(apiPath('/settings'), {
           method: 'POST',
-          headers: adminHeaders(user),
+          headers: adminHeaders(user, token),
           body: JSON.stringify({ serviceId: user.serviceId, ...s })
         })
       ));
+
+      await fetch(apiPath(`/services/${user.serviceId}/operations`), {
+        method: 'PUT',
+        headers: adminHeaders(user, token),
+        body: JSON.stringify({
+          estimated_wait_time: estimatedWaitTime,
+          max_capacity: maxCapacity,
+          is_open: isOpen,
+          is_fast_track_available: isFastTrackAvailable
+        })
+      });
+
+      await fetch(apiPath(`/services/${user.serviceId}/schedules`), {
+        method: 'PUT',
+        headers: adminHeaders(user, token),
+        body: JSON.stringify({ schedules })
+      });
+
       alert('Settings saved successfully!');
     } catch (err) {
       console.error('Error saving settings:', err);
@@ -85,10 +157,10 @@ const AdminSettingsPage = () => {
         ...styles.mainContent,
         marginLeft: window.innerWidth > 1024 ? '260px' : '0'
       }}>
-        <AdminTopBar 
-          searchQuery={searchQuery} 
-          setSearchQuery={setSearchQuery} 
-          placeholder="Search settings..." 
+        <AdminTopBar
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          placeholder="Search settings..."
           onMenuClick={() => setIsSidebarOpen(true)}
         />
 
@@ -104,7 +176,7 @@ const AdminSettingsPage = () => {
             <aside style={styles.subSidebar}>
               <nav style={styles.subSticky}>
                 {navItems.map(item => (
-                  <button 
+                  <button
                     key={item.id}
                     onClick={() => scrollToSection(item.id)}
                     style={activeSection === item.id ? styles.subNavLinkActive : styles.subNavLink}
@@ -118,7 +190,7 @@ const AdminSettingsPage = () => {
 
             {/* Content area */}
             <div style={styles.panelsArea}>
-              
+
               {/* Section: General */}
               <section id="general" style={styles.sectionPanel}>
                 <div style={styles.sectionHeader}>
@@ -134,16 +206,20 @@ const AdminSettingsPage = () => {
                 <div style={styles.grid2}>
                   <div style={styles.inputGroup}>
                     <label style={styles.label}>Business Name</label>
-                    <input 
-                      type="text" 
-                      value={businessName} 
+                    <input
+                      type="text"
+                      value={businessName}
                       onChange={(e) => setBusinessName(e.target.value)}
                       style={styles.inputText}
                     />
                   </div>
                   <div style={styles.inputGroup}>
                     <label style={styles.label}>Service Category</label>
-                    <select style={styles.inputSelect}>
+                    <select 
+                      value={serviceCategory}
+                      onChange={(e) => setServiceCategory(e.target.value)}
+                      style={styles.inputSelect}
+                    >
                       <option>Healthcare</option>
                       <option>Banking</option>
                       <option>Retail</option>
@@ -156,32 +232,50 @@ const AdminSettingsPage = () => {
 
                 <h3 className="headline" style={styles.subTitle}>Operational Hours</h3>
                 <div style={styles.hoursList}>
-                  <div style={styles.hourRow}>
-                    <span style={styles.dayText}>Monday — Friday</span>
-                    <div style={styles.timeInputs}>
-                      <input type="time" defaultValue="08:00" style={styles.timeField} />
-                      <span style={styles.toText}>to</span>
-                      <input type="time" defaultValue="18:00" style={styles.timeField} />
-                    </div>
-                  </div>
-                  <div style={styles.hourRow}>
-                    <span style={styles.dayText}>Saturday</span>
-                    <div style={styles.timeInputs}>
-                      <input type="time" defaultValue="09:00" style={styles.timeField} />
-                      <span style={styles.toText}>to</span>
-                      <input type="time" defaultValue="14:00" style={styles.timeField} />
-                    </div>
-                  </div>
-                  <div style={{ ...styles.hourRow, opacity: 0.5 }}>
-                    <span style={styles.dayText}>Sunday</span>
-                    <span style={styles.closedTag}>Closed</span>
-                  </div>
+                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((dayName, idx) => {
+                    const dayNum = idx + 1;
+                    const sched = schedules.find(s => s.day_of_week === dayNum) || defaultSchedule[idx];
+                    return (
+                      <div key={dayNum} style={{ ...styles.hourRow, alignItems: 'flex-start' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', width: '130px', marginTop: '0.5rem' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={!sched.is_closed} 
+                            onChange={(e) => handleScheduleChange(dayNum, 'is_closed', !e.target.checked)}
+                            style={{ marginRight: '8px', accentColor: 'var(--primary)' }}
+                          />
+                          <span style={{ ...styles.dayText, opacity: sched.is_closed ? 0.5 : 1 }}>{dayName}</span>
+                        </div>
+                        
+                        {!sched.is_closed ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', flex: 1 }}>
+                            <div style={styles.timeInputs}>
+                              <span style={{ fontSize: '13px', color: 'var(--on-surface-variant)', width: '70px', fontWeight: 'bold' }}>Morning</span>
+                              <input type="time" value={sched.morning_open} onChange={e => handleScheduleChange(dayNum, 'morning_open', e.target.value)} style={styles.timeField} />
+                              <span style={styles.toText}>to</span>
+                              <input type="time" value={sched.morning_close} onChange={e => handleScheduleChange(dayNum, 'morning_close', e.target.value)} style={styles.timeField} />
+                            </div>
+                            <div style={styles.timeInputs}>
+                              <span style={{ fontSize: '13px', color: 'var(--on-surface-variant)', width: '70px', fontWeight: 'bold' }}>Afternoon</span>
+                              <input type="time" value={sched.afternoon_open} onChange={e => handleScheduleChange(dayNum, 'afternoon_open', e.target.value)} style={styles.timeField} />
+                              <span style={styles.toText}>to</span>
+                              <input type="time" value={sched.afternoon_close} onChange={e => handleScheduleChange(dayNum, 'afternoon_close', e.target.value)} style={styles.timeField} />
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ flex: 1, display: 'flex', alignItems: 'center', height: '40px' }}>
+                            <span style={styles.closedTag}>Closed</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
 
               {/* Section: Notifications */}
               <section id="notifications" style={styles.sectionPanel}>
-                 <div style={styles.sectionHeader}>
+                <div style={styles.sectionHeader}>
                   <div style={{ ...styles.iconBox, backgroundColor: 'var(--secondary-container)', color: 'var(--secondary)' }}>
                     <span className="material-symbols-outlined">notifications_active</span>
                   </div>
@@ -194,10 +288,10 @@ const AdminSettingsPage = () => {
                 <div style={styles.togglesList}>
                   <div style={styles.toggleRow}>
                     <div style={{ flex: 1 }}>
-                       <p style={styles.toggleLabel}>SMS Alerts</p>
-                       <p style={styles.toggleDesc}>Send a text message when customer is 3rd in line.</p>
+                      <p style={styles.toggleLabel}>SMS Alerts</p>
+                      <p style={styles.toggleDesc}>Send a text message when customer is 3rd in line.</p>
                     </div>
-                    <button 
+                    <button
                       onClick={() => setSmsEnabled(!smsEnabled)}
                       style={smsEnabled ? styles.switchActive : styles.switch}
                     >
@@ -206,10 +300,10 @@ const AdminSettingsPage = () => {
                   </div>
                   <div style={styles.toggleRow}>
                     <div style={{ flex: 1 }}>
-                       <p style={styles.toggleLabel}>Email Confirmation</p>
-                       <p style={styles.toggleDesc}>Send digital ticket immediately after joining the queue.</p>
+                      <p style={styles.toggleLabel}>Email Confirmation</p>
+                      <p style={styles.toggleDesc}>Send digital ticket immediately after joining the queue.</p>
                     </div>
-                    <button 
+                    <button
                       onClick={() => setEmailEnabled(!emailEnabled)}
                       style={emailEnabled ? styles.switchActive : styles.switch}
                     >
@@ -241,31 +335,69 @@ const AdminSettingsPage = () => {
 
                 <div style={styles.grid2}>
                   <div style={styles.inputGroup}>
+                    <label style={styles.label}>Wait Metric (Minutes per customer)</label>
+                    <input
+                      type="number"
+                      value={estimatedWaitTime}
+                      onChange={(e) => setEstimatedWaitTime(parseInt(e.target.value) || 0)}
+                      style={styles.inputText}
+                    />
+                    <p style={styles.inputHint}>Estimated time to serve one customer.</p>
+                  </div>
+
+                  <div style={styles.inputGroup}>
+                    <label style={styles.label}>Max Capacity Limit</label>
+                    <input
+                      type="number"
+                      value={maxCapacity}
+                      onChange={(e) => setMaxCapacity(parseInt(e.target.value) || 0)}
+                      style={styles.inputText}
+                    />
+                    <p style={styles.inputHint}>Maximum number of tickets allowed in the queue.</p>
+                  </div>
+                </div>
+
+                <div style={{ ...styles.grid2, marginTop: '2rem' }}>
+                  <div style={styles.inputGroup}>
                     <div style={styles.labelValue}>
-                       <label style={styles.label}>Grace Period (Minutes)</label>
-                       <span style={styles.sliderVal}>{gracePeriod}m</span>
+                      <label style={styles.label}>Grace Period (Minutes)</label>
+                      <span style={styles.sliderVal}>{gracePeriod}m</span>
                     </div>
-                    <input 
-                      type="range" 
-                      min="1" 
-                      max="20" 
-                      value={gracePeriod} 
+                    <input
+                      type="range"
+                      min="1"
+                      max="20"
+                      value={gracePeriod}
                       onChange={(e) => setGracePeriod(e.target.value)}
-                      style={styles.inputRange} 
+                      style={styles.inputRange}
                     />
                     <p style={styles.inputHint}>Time a customer has to arrive after being called before auto-skip.</p>
                   </div>
-                  
-                  <div style={styles.inputGroup}>
-                    <label style={styles.label}>Max Capacity Warning</label>
-                    <input 
-                      type="number" 
-                      value={maxCapacity} 
-                      onChange={(e) => setMaxCapacity(e.target.value)}
-                      style={styles.inputText} 
-                    />
-                    <p style={styles.inputHint}>Alert staff when the total queue exceeds this number.</p>
-                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+                  <button
+                    onClick={() => setIsOpen(!isOpen)}
+                    style={{
+                      flex: 1, padding: '1rem', borderRadius: '1rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                      backgroundColor: isOpen ? 'var(--tertiary-container)' : 'var(--surface-container-high)',
+                      color: isOpen ? 'var(--on-tertiary-container)' : 'var(--on-surface-variant)',
+                      border: 'none', cursor: 'pointer', transition: 'all 0.3s'
+                    }}>
+                    <span className="material-symbols-outlined">{isOpen ? 'check_circle' : 'cancel'}</span>
+                    {isOpen ? 'Hub Active' : 'Hub Offline'}
+                  </button>
+                  <button
+                    onClick={() => setIsFastTrackAvailable(!isFastTrackAvailable)}
+                    style={{
+                      flex: 1, padding: '1rem', borderRadius: '1rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                      backgroundColor: isFastTrackAvailable ? 'var(--secondary-container)' : 'var(--surface-container-high)',
+                      color: isFastTrackAvailable ? 'var(--on-secondary-container)' : 'var(--on-surface-variant)',
+                      border: 'none', cursor: 'pointer', transition: 'all 0.3s'
+                    }}>
+                    <span className="material-symbols-outlined">bolt</span>
+                    Fast Track
+                  </button>
                 </div>
               </section>
 
@@ -282,47 +414,47 @@ const AdminSettingsPage = () => {
                 </div>
 
                 <div style={styles.secureList}>
-                   <div style={styles.secureLink}>
-                     <div style={styles.secureIcon}>
-                       <span className="material-symbols-outlined">fingerprint</span>
-                     </div>
-                     <div style={{ flex: 1 }}>
-                        <p style={styles.secureTitle}>Two-Factor Authentication</p>
-                        <p style={styles.secureDesc}>Add an extra layer of security to your admin login.</p>
-                     </div>
-                     <span className="material-symbols-outlined" style={{ opacity: 0.3 }}>chevron_right</span>
-                   </div>
-                   <div style={styles.secureLink}>
-                     <div style={styles.secureIcon}>
-                       <span className="material-symbols-outlined">history</span>
-                     </div>
-                     <div style={{ flex: 1 }}>
-                        <p style={styles.secureTitle}>Audit Logs</p>
-                        <p style={styles.secureDesc}>Review all system changes made by staff members.</p>
-                     </div>
-                     <span className="material-symbols-outlined" style={{ opacity: 0.3 }}>chevron_right</span>
-                   </div>
-                   
-                   <div style={styles.dangerZone}>
-                      <div style={{ display: 'flex', gap: '1rem' }}>
-                        <div style={styles.dangerIcon}>
-                           <span className="material-symbols-outlined">delete_forever</span>
-                        </div>
-                        <div>
-                           <p style={styles.dangerTitle}>Clear Historical Data</p>
-                           <p style={styles.dangerDesc}>Wipe all queue history older than 365 days.</p>
-                        </div>
+                  <div style={styles.secureLink}>
+                    <div style={styles.secureIcon}>
+                      <span className="material-symbols-outlined">fingerprint</span>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <p style={styles.secureTitle}>Two-Factor Authentication</p>
+                      <p style={styles.secureDesc}>Add an extra layer of security to your admin login.</p>
+                    </div>
+                    <span className="material-symbols-outlined" style={{ opacity: 0.3 }}>chevron_right</span>
+                  </div>
+                  <div style={styles.secureLink}>
+                    <div style={styles.secureIcon}>
+                      <span className="material-symbols-outlined">history</span>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <p style={styles.secureTitle}>Audit Logs</p>
+                      <p style={styles.secureDesc}>Review all system changes made by staff members.</p>
+                    </div>
+                    <span className="material-symbols-outlined" style={{ opacity: 0.3 }}>chevron_right</span>
+                  </div>
+
+                  <div style={styles.dangerZone}>
+                    <div style={{ display: 'flex', gap: '1rem' }}>
+                      <div style={styles.dangerIcon}>
+                        <span className="material-symbols-outlined">delete_forever</span>
                       </div>
-                      <button style={styles.dangerBtn}>Execute Wipe</button>
-                   </div>
+                      <div>
+                        <p style={styles.dangerTitle}>Clear Historical Data</p>
+                        <p style={styles.dangerDesc}>Wipe all queue history older than 365 days.</p>
+                      </div>
+                    </div>
+                    <button style={styles.dangerBtn}>Execute Wipe</button>
+                  </div>
                 </div>
               </section>
 
               {/* Action Bar */}
               <div style={styles.actionBar}>
-                 <button style={styles.discardBtn}>Discard Changes</button>
-                 <button className="primary-gradient" style={styles.saveBtn} onClick={handleSave}>Save Changes</button>
-                 <button style={styles.resetBtn} onClick={fetchSettings}>Reset to Defaults</button>
+                <button style={styles.discardBtn}>Discard Changes</button>
+                <button className="primary-gradient" style={styles.saveBtn} onClick={handleSave}>Save Changes</button>
+                <button style={styles.resetBtn} onClick={fetchSettings}>Reset to Defaults</button>
               </div>
 
             </div>

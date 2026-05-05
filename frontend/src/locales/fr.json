@@ -1,0 +1,34 @@
+{
+  "common": {
+    "dashboard": "Tableau de bord",
+    "services": "Services",
+    "users": "Utilisateurs",
+    "analytics": "Analyses",
+    "settings": "Paramètres",
+    "logout": "Déconnexion",
+    "login": "Connexion",
+    "register": "S'inscrire",
+    "create": "Créer",
+    "update": "Mettre à jour",
+    "delete": "Supprimer",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "search": "Rechercher",
+    "actions": "Actions",
+    "status": "Statut",
+    "active": "Actif",
+    "offline": "Hors ligne",
+    "online": "En ligne"
+  },
+  "superAdmin": {
+    "title": "Centre Super Admin",
+    "subtitle": "Gérer les services mondiaux et les comptes administratifs.",
+    "manageServices": "Gérer les Services",
+    "adminAccounts": "Comptes Admin",
+    "addService": "Ajouter un Service",
+    "createAdmin": "Créer un Compte Admin",
+    "admin": "Administrateur",
+    "role": "Rôle",
+    "assignedService": "Service Assigné"
+  }
+}
