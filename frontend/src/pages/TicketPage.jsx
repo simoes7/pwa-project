@@ -20,6 +20,7 @@ const TicketPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
+  const [selectedTicketId, setSelectedTicketId] = useState(null);
   const fetchTickets = useCallback(async () => {
     if (!user) return;
     try {
@@ -28,6 +29,10 @@ const TicketPage = () => {
       if (response.ok) {
         const data = await response.json();
         setTickets(data);
+        // Default to first ticket if none selected or selected ticket no longer exists
+        if (data.length > 0 && (!selectedTicketId || !data.find(t => t.id === selectedTicketId))) {
+          setSelectedTicketId(data[0].id);
+        }
       } else {
         setError('Failed to fetch tickets');
       }
@@ -91,8 +96,10 @@ const TicketPage = () => {
   const [showApproachingMessage, setShowApproachingMessage] = useState(false);
   const [avgServiceTime, setAvgServiceTime] = useState(10);
 
-  // We show the first active ticket
-  const ticket = tickets.length > 0 ? tickets[0] : null;
+  // We show the selected active ticket
+  const ticket = selectedTicketId 
+    ? (tickets.find(t => t.id === selectedTicketId) || (tickets.length > 0 ? tickets[0] : null))
+    : (tickets.length > 0 ? tickets[0] : null);
   const activeTicketId = ticket?.id;
 
   useEffect(() => {
@@ -222,6 +229,32 @@ const TicketPage = () => {
         {/* Background Blurs */}
         <div style={styles.blurTop}></div>
         <div style={styles.blurBottom}></div>
+
+        {/* Ticket Selector - Horizontal Chips */}
+        {tickets.length > 1 && (
+          <div style={styles.selectorContainer}>
+            <div style={styles.selectorScroll}>
+              {tickets.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setSelectedTicketId(t.id)}
+                  style={{
+                    ...styles.ticketChip,
+                    ...(selectedTicketId === t.id ? styles.ticketChipActive : {})
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '1.25rem' }}>
+                    {t.status === 'called' ? 'campaign' : t.status === 'paused' ? 'pause_circle' : 'confirmation_number'}
+                  </span>
+                  <div style={styles.chipText}>
+                    <span style={styles.chipNum}>{t.ticket_prefix || 'T'}-{String(t.queue_number || t.id).padStart(2, '0')}</span>
+                    <span style={styles.chipService}>{t.service_name}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Called State Banner */}
         {ticket.status === 'called' && (
@@ -465,6 +498,54 @@ const styles = {
   container: {
     minHeight: '100vh',
     position: 'relative'
+  },
+  selectorContainer: {
+    marginBottom: '2rem',
+    overflowX: 'auto',
+    WebkitOverflowScrolling: 'touch',
+    padding: '0.5rem 0'
+  },
+  selectorScroll: {
+    display: 'flex',
+    gap: '1rem',
+    padding: '0 0.5rem'
+  },
+  ticketChip: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+    padding: '0.75rem 1.25rem',
+    borderRadius: '1.5rem',
+    backgroundColor: 'var(--surface-container-low)',
+    border: '1px solid var(--outline-variant)',
+    color: 'var(--on-surface-variant)',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    whiteSpace: 'nowrap',
+    minWidth: '160px',
+    textAlign: 'left'
+  },
+  ticketChipActive: {
+    backgroundColor: 'var(--primary-container)',
+    borderColor: 'var(--primary)',
+    color: 'var(--on-primary-container)',
+    boxShadow: '0 4px 12px rgba(0, 85, 215, 0.15)'
+  },
+  chipText: {
+    display: 'flex',
+    flexDirection: 'column'
+  },
+  chipNum: {
+    fontSize: '1rem',
+    fontWeight: '800',
+    lineHeight: 1
+  },
+  chipService: {
+    fontSize: '0.75rem',
+    opacity: 0.8,
+    maxWidth: '120px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis'
   },
   main: {
     maxWidth: '896px', // max-w-4xl
