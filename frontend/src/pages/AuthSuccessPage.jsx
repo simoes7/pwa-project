@@ -16,7 +16,13 @@ const AuthSuccessPage = () => {
         if (response.ok) {
           const data = await response.json();
           handleGoogleAuthSuccess(data.user);
-          navigate('/');
+          if (data.user.role === 'super_admin') {
+            navigate('/super-admin');
+          } else if (data.user.role === 'admin') {
+            navigate('/admin');
+          } else {
+            navigate('/');
+          }
         } else {
           navigate('/register?error=no_user_data');
         }

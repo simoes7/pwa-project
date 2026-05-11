@@ -1,7 +1,9 @@
-import React from 'react';
+import { useTranslation } from 'react-i18next';
+import LanguageSwitcher from './LanguageSwitcher';
 import { useAuth } from '../context/AuthContext';
 
 const AdminTopBar = ({ searchQuery, setSearchQuery, placeholder = "Search...", onMenuClick }) => {
+  const { t } = useTranslation();
   const { user } = useAuth();
 
   return (
@@ -19,7 +21,7 @@ const AdminTopBar = ({ searchQuery, setSearchQuery, placeholder = "Search...", o
           <span className="material-symbols-outlined" style={styles.searchIcon}>search</span>
           <input 
             type="text" 
-            placeholder={placeholder} 
+            placeholder={placeholder || t('common.search')} 
             style={styles.searchInput}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -28,6 +30,7 @@ const AdminTopBar = ({ searchQuery, setSearchQuery, placeholder = "Search...", o
       </div>
       
       <div style={styles.appBarActions}>
+        <LanguageSwitcher />
         <button style={styles.iconBtn} className="hide-tablet">
           <span className="material-symbols-outlined">notifications</span>
           <span style={styles.notificationDot}></span>

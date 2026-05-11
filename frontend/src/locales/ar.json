@@ -1,0 +1,34 @@
+{
+  "common": {
+    "dashboard": "لوحة القيادة",
+    "services": "الخدمات",
+    "users": "المستخدمين",
+    "analytics": "التحليلات",
+    "settings": "الإعدادات",
+    "logout": "تسجيل الخروج",
+    "login": "تسجيل الدخول",
+    "register": "تسجيل",
+    "create": "إنشاء",
+    "update": "تحديث",
+    "delete": "حذف",
+    "cancel": "إلغاء",
+    "save": "حفظ",
+    "search": "بحث",
+    "actions": "الإجراءات",
+    "status": "الحالة",
+    "active": "نشط",
+    "offline": "غير متصل",
+    "online": "متصل"
+  },
+  "superAdmin": {
+    "title": "مركز المسؤول الخارق",
+    "subtitle": "إدارة الخدمات العالمية والحسابات الإدارية.",
+    "manageServices": "إدارة الخدمات",
+    "adminAccounts": "حسابات المسؤولين",
+    "addService": "إضافة خدمة جديدة",
+    "createAdmin": "إنشاء حساب مسؤول",
+    "admin": "المسؤول",
+    "role": "الدور",
+    "assignedService": "الخدمة المسندة"
+  }
+}

@@ -25,8 +25,6 @@ import SupportPage from './pages/SupportPage';
 
 // Guards
 import ProtectedRoute from './components/ProtectedRoute';
-import AdminRoute from './components/AdminRoute';
-import SuperAdminRoute from './components/SuperAdminRoute';
 
 function App() {
   const location = useLocation();
@@ -69,9 +67,9 @@ function App() {
             <Route
               path="/super-admin"
               element={
-                <SuperAdminRoute>
+                <ProtectedRoute requireRole="super_admin">
                   <SuperAdminPage />
-                </SuperAdminRoute>
+                </ProtectedRoute>
               }
             />
 
@@ -86,41 +84,41 @@ function App() {
             <Route
               path="/admin"
               element={
-                <AdminRoute>
+                <ProtectedRoute requireRole="admin">
                   <AdminDashboardPage />
-                </AdminRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="/admin/analytics"
               element={
-                <AdminRoute>
+                <ProtectedRoute requireRole="admin">
                   <AdminAnalyticsPage />
-                </AdminRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="/admin/control"
               element={
-                <AdminRoute>
+                <ProtectedRoute requireRole="admin">
                   <AdminControlPage />
-                </AdminRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="/admin/services"
               element={
-                <AdminRoute>
+                <ProtectedRoute requireRole="admin">
                   <AdminServicesPage />
-                </AdminRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="/admin/settings"
               element={
-                <AdminRoute>
+                <ProtectedRoute requireRole="admin">
                   <AdminSettingsPage />
-                </AdminRoute>
+                </ProtectedRoute>
               }
             />
           </Routes>

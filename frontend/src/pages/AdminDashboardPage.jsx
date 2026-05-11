@@ -2,10 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import AdminSidebar from '../components/AdminSidebar';
 import AdminTopBar from '../components/AdminTopBar';
-import { apiPath, adminHeaders } from '../config';
+import { apiPath } from '../config';
 
 const AdminDashboardPage = () => {
-  const { user } = useAuth();
+  const { user, authFetch } = useAuth();
   const [tickets, setTickets] = useState([]);
   const [services, setServices] = useState([]);
   const [stats, setStats] = useState({ total_today: 0, active_services: 0, avg_wait: 0 });
@@ -17,9 +17,9 @@ const AdminDashboardPage = () => {
     try {
       const serviceParam = user?.serviceId ? `?serviceId=${user.serviceId}` : '';
       const [ticketsRes, servicesRes, statsRes] = await Promise.all([
-        fetch(apiPath(`/tickets${serviceParam}`), { headers: adminHeaders(user) }),
-        fetch(apiPath('/services'), { headers: adminHeaders(user) }),
-        fetch(apiPath(`/stats${serviceParam}`), { headers: adminHeaders(user) })
+        authFetch(apiPath(`/tickets${serviceParam}`)),
+        authFetch(apiPath('/services')),
+        authFetch(apiPath(`/stats${serviceParam}`))
       ]);
       
       if (ticketsRes.ok && servicesRes.ok && statsRes.ok) {
@@ -36,9 +36,9 @@ const AdminDashboardPage = () => {
 
   const handleUpdateStatus = async (ticketId, status) => {
     try {
-      const response = await fetch(apiPath(`/tickets/${ticketId}`), {
+      const response = await authFetch(apiPath(`/tickets/${ticketId}`), {
         method: 'PATCH',
-        headers: adminHeaders(user),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
       });
       if (response.ok) fetchData();
@@ -80,9 +80,9 @@ const AdminDashboardPage = () => {
     
     if (waitingTickets.length > 0) {
       try {
-        const response = await fetch(apiPath('/tickets/call-next'), {
+        const response = await authFetch(apiPath('/tickets/call-next'), {
           method: 'POST',
-          headers: adminHeaders(user),
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ serviceId: waitingTickets[0].service_id })
         });
         if (response.ok) {

@@ -63,14 +63,14 @@ const ServicesPage = () => {
       navigate('/login');
       return;
     }
-    
+
     try {
       const response = await fetch(apiPath('/tickets'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, serviceId })
       });
-      
+
       if (response.ok) {
         navigate('/ticket');
       } else {
@@ -91,7 +91,7 @@ const ServicesPage = () => {
 
   return (
     <div className="page-container" style={isMobile ? { paddingBottom: '6rem', minHeight: '100vh' } : {}}>
-      
+
       {/* Hero Section */}
       <header style={{
         ...styles.heroHeader,
@@ -114,9 +114,9 @@ const ServicesPage = () => {
       {/* Service Categories Filter */}
       <div style={styles.filterBar}>
         {uniqueCategories.map(f => (
-          <button 
-            key={f} 
-            style={{...styles.filterBtn, ...(filter === f ? styles.filterBtnActive : {})}}
+          <button
+            key={f}
+            style={{ ...styles.filterBtn, ...(filter === f ? styles.filterBtnActive : {}) }}
             onClick={() => setFilter(f)}
           >
             {f}
@@ -130,7 +130,7 @@ const ServicesPage = () => {
 
       {/* Services Grid - Bento Style */}
       <div className="services-grid">
-        
+
         {dbServices
           .filter(s => filter === 'All Services' || s.category === filter)
           .map((service, index) => {
@@ -138,128 +138,80 @@ const ServicesPage = () => {
             const waitTime = inQueue * service.estimated_wait_time + service.estimated_wait_time;
 
             return (
-              <div key={service.id} className="glass-card" style={index === 0 ? {
-                ...styles.largeCard,
-                gridColumn: isMobile ? 'span 12' : 'span 8',
-                padding: isSmallMobile ? '1.5rem' : isMobile ? '2.5rem' : '3rem'
-              } : {
-                ...styles.smallCard,
-                gridColumn: isMobile ? 'span 12' : 'span 4'
-              }}>
-                
-                {/* Header / Icon */}
-                <div style={index === 0 ? styles.cardHeader : { ...styles.iconBox, backgroundColor: `var(--${service.color_theme})`, color: `var(--on-${service.color_theme})`, marginBottom: '1.5rem' }}>
-                  {index === 0 ? (
-                    <>
-                      <div style={{ 
-                        ...styles.iconBox, 
-                        backgroundColor: `var(--${service.color_theme})`, 
-                        color: `var(--on-${service.color_theme})`,
-                        width: isSmallMobile ? '48px' : '64px',
-                        height: isSmallMobile ? '48px' : '64px'
-                      }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: isSmallMobile ? '1.5rem' : '2.5rem' }}>{service.icon}</span>
-                      </div>
-                      {service.is_fast_track_available && (
-                        <div style={styles.badge} className="hide-mobile">
-                          FAST TRACK AVAILABLE
-                        </div>
-                      )}
-                  {!service.is_open && (
-                        <div style={styles.closedBadge}>
-                          CLOSED
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <span className="material-symbols-outlined" style={{ fontSize: '2rem' }}>{service.icon}</span>
-                  )}
-                </div>
-
-                {/* Body Content */}
-                {index === 0 ? (
-                  <div style={styles.cardBody}>
-                    <h3 className="headline" style={{
-                      ...styles.cardTitleLarge,
-                      fontSize: isSmallMobile ? '1.75rem' : '2.5rem'
-                    }}>{service.name}</h3>
-                    <p style={styles.cardDescLarge}>{service.description}</p>
-                    
-                    <div style={{
-                      ...styles.statsRow,
-                      gap: isSmallMobile ? '1rem' : '2rem'
-                    }}>
-                      <div style={styles.statBox}>
-                        <span style={styles.statLabel}>Wait Time</span>
-                        <div style={styles.statValBox}>
-                          <span style={{ ...styles.statVal, fontSize: isSmallMobile ? '1.5rem' : '2.5rem' }}>{waitTime}</span>
-                          <span style={styles.statUnit}>min</span>
-                        </div>
-                      </div>
-                      <div style={styles.statDivider}></div>
-                      <div style={styles.statBox}>
-                        <span style={styles.statLabel}>In Queue</span>
-                        <div style={styles.statValBox}>
-                          <span style={{ ...styles.statVal, fontSize: isSmallMobile ? '1.5rem' : '2.5rem' }}>{inQueue}</span>
-                          <span style={styles.statUnit}>ppl</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <h3 className="headline" style={styles.cardTitleSmall}>{service.name}</h3>
-                    <p style={styles.cardDescSmall}>{service.description}</p>
-                    
-                    <div style={styles.waitInfo}>
-                      <div style={styles.waitHeader}>
-                        <span>Estimated Wait</span>
-                        <span style={{ fontWeight: '700' }}>{waitTime} mins</span>
-                      </div>
-                      <div style={styles.progressTrack}>
-                        <div style={{ ...styles.progressFill, width: '75%' }}></div>
-                      </div>
-                    </div>
-                  </>
+              <div key={service.id} className="bg-blue-50/50 dark:bg-slate-900/50 p-6 rounded-[2rem] flex flex-col justify-between min-h-[300px] transition-all hover:-translate-y-1 hover:shadow-xl group border border-blue-100 dark:border-slate-800 relative overflow-hidden" style={{ backgroundColor: service.color_theme ? `${service.color_theme}10` : '', gridColumn: isMobile ? 'span 12' : 'span 4' }}>
+                {service.cover_image_url && (
+                  <div className="absolute top-0 left-0 right-0 h-28 opacity-20 bg-cover bg-center" style={{ backgroundImage: `url(${service.cover_image_url})` }}></div>
                 )}
-
-                {/* Action Row */}
-                {index === 0 ? (
-                  <div style={{
-                    ...styles.actionRow,
-                    flexDirection: isSmallMobile ? 'column' : 'row'
-                  }}>
-                    <button 
-                      className={(service.is_open && !hasActiveTicket(service.id)) ? 'primary-gradient' : ''}
-                      style={{ 
-                        ...styles.primaryAction, 
-                        width: isSmallMobile ? '100%' : 'auto',
-                        ...((!service.is_open || hasActiveTicket(service.id)) ? styles.disabledAction : {})
-                      }}
-                      onClick={() => service.is_open && !hasActiveTicket(service.id) && handleTakeTicket(service.id)}
-                      disabled={hasActiveTicket(service.id) || !service.is_open}
-                    >
-                      {!service.is_open ? 'Currently Closed' : hasActiveTicket(service.id) ? 'Ticket Taken' : 'Take Ticket'}
-                    </button>
-                    <button style={{ ...styles.secondaryAction, width: isSmallMobile ? '100%' : 'auto' }}>Details</button>
+                
+                <div className="relative z-10 flex flex-col h-full">
+                  <div className="flex justify-between items-start mb-5">
+                    {service.logo_url ? (
+                      <div className="w-16 h-16 rounded-2xl overflow-hidden bg-white shadow-sm border border-slate-100 flex items-center justify-center p-1">
+                        <img src={service.logo_url} alt={service.name} className="w-full h-full object-contain" />
+                      </div>
+                    ) : (
+                      <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-md" style={{ backgroundColor: service.color_theme || 'var(--primary)' }}>
+                        <span className="material-symbols-outlined text-3xl">{service.icon || 'hub'}</span>
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      {service.is_fast_track_available && (
+                        <div className="bg-amber-100 text-amber-800 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[12px]">bolt</span>
+                          Fast
+                        </div>
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  <button 
-                    style={{
-                      ...(index % 2 === 1 ? styles.darkAction : styles.lightAction),
-                      ...((!service.is_open || hasActiveTicket(service.id)) ? styles.disabledAction : {})
-                    }}
+
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-1.5 leading-tight mb-1">
+                      {service.name}
+                      <span className="material-symbols-outlined text-[1.1rem] text-slate-400">location_on</span>
+                    </h3>
+                    <p className="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase tracking-wider mb-4">{service.category || 'Service Hub'}</p>
+                    
+                    <div className="text-slate-600 dark:text-slate-300 text-sm mb-6 line-clamp-3">
+                      {service.description || 'Visit our center for operational services.'}
+                    </div>
+                  </div>
+
+                  <div className="bg-white/60 dark:bg-slate-800/60 rounded-xl p-4 mb-4 backdrop-blur-sm border border-slate-100 dark:border-slate-700/50">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Wait Time</span>
+                      <span className="text-sm font-black text-slate-900 dark:text-white">{waitTime} mins</span>
+                    </div>
+                    <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" style={{ width: `${Math.min(100, (inQueue / 10) * 100)}%` }}></div>
+                    </div>
+                    <div className="mt-2 text-[10px] text-right font-medium text-slate-400 uppercase tracking-wider">
+                      {inQueue} people in queue
+                    </div>
+                  </div>
+
+                  <button
+                    className={`w-full py-3.5 rounded-xl font-bold transition-all shadow-sm flex items-center justify-center gap-2 ${(service.is_open && !hasActiveTicket(service.id)) ? 'bg-indigo-600 hover:bg-indigo-700 text-white hover:shadow-md' : 'bg-slate-200 dark:bg-slate-800 text-slate-500 cursor-not-allowed'}`}
                     onClick={() => service.is_open && !hasActiveTicket(service.id) && handleTakeTicket(service.id)}
                     disabled={hasActiveTicket(service.id) || !service.is_open}
                   >
-                    {!service.is_open ? 'Currently Closed' : hasActiveTicket(service.id) ? 'Ticket Taken' : 'Take Ticket'}
+                    {!service.is_open ? (
+                      <>
+                        <span className="material-symbols-outlined text-[18px]">block</span>
+                        Closed
+                      </>
+                    ) : hasActiveTicket(service.id) ? (
+                      <>
+                        <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                        Ticket Active
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-[18px]">confirmation_number</span>
+                        Join Queue
+                      </>
+                    )}
                   </button>
-                )}
-
-                {/* Decorative Graphic for Large Card */}
-                {index === 0 && (
-                  <div style={styles.decorativeImage} className="hide-on-xsmall"></div>
-                )}
+                </div>
               </div>
             );
           })}
@@ -286,7 +238,7 @@ const ServicesPage = () => {
           </div>
           {!isMobile && (
             <div style={styles.wideGraphic}>
-               <span className="material-symbols-outlined" style={{ fontSize: '6rem', color: 'var(--outline-variant)', opacity: 0.5 }}>help_center</span>
+              <span className="material-symbols-outlined" style={{ fontSize: '6rem', color: 'var(--outline-variant)', opacity: 0.5 }}>help_center</span>
             </div>
           )}
         </div>
