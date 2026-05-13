@@ -120,7 +120,7 @@ export const AuthProvider = ({ children }) => {
 
   const loginWithGoogle = async () => {
     try {
-      const response = await fetch('http://localhost:3001/auth/google', {
+      const response = await fetch('http://localhost:3001/auth/google/check', {
         credentials: 'include'
       });
       if (!response.ok) {
@@ -131,6 +131,7 @@ export const AuthProvider = ({ children }) => {
         }
         throw new Error(error.message || 'Google OAuth setup error');
       }
+      // If check passes, redirect the main window to the auth endpoint
       window.location.href = 'http://localhost:3001/auth/google';
     } catch (error) {
       console.error('Google OAuth error:', error);
@@ -141,8 +142,10 @@ export const AuthProvider = ({ children }) => {
   const handleGoogleAuthSuccess = (userData) => {
     setUser(userData);
     localStorage.setItem('smartQueueUser', JSON.stringify(userData));
-    // Since Google OAuth currently uses sessions on backend, we might not have a JWT.
-    // If backend returns one in the future, we'd set it here.
+    if (userData.token) {
+      setToken(userData.token);
+      localStorage.setItem('smartQueueToken', userData.token);
+    }
     return userData;
   };
 

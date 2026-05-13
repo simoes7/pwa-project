@@ -7,8 +7,13 @@ const AuthSuccessPage = () => {
   const navigate = useNavigate();
   const { handleGoogleAuthSuccess } = useAuth();
 
+  const fetchedRef = React.useRef(false);
+
   useEffect(() => {
+    if (fetchedRef.current) return;
+    
     const fetchOAuthUser = async () => {
+      fetchedRef.current = true;
       try {
         const response = await fetch(apiPath('/auth/oauth-user'), {
           credentials: 'include'
@@ -17,18 +22,20 @@ const AuthSuccessPage = () => {
           const data = await response.json();
           handleGoogleAuthSuccess(data.user);
           if (data.user.role === 'super_admin') {
-            navigate('/super-admin');
+            navigate('/super-admin', { replace: true });
           } else if (data.user.role === 'admin') {
-            navigate('/admin');
+            navigate('/admin', { replace: true });
           } else {
-            navigate('/');
+            navigate('/', { replace: true });
           }
         } else {
-          navigate('/register?error=no_user_data');
+          // If the user state is already set (from a previous successful fetch), don't redirect
+          // Otherwise, redirect to register
+          navigate('/register?error=no_user_data', { replace: true });
         }
       } catch (error) {
         console.error('Error fetching OAuth user:', error);
-        navigate('/register?error=auth_failed');
+        navigate('/register?error=auth_failed', { replace: true });
       }
     };
     fetchOAuthUser();
