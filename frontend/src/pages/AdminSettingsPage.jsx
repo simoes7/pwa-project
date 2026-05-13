@@ -1,11 +1,13 @@
 import React, { useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useAlert } from '../context/AlertContext';
 import AdminSidebar from '../components/AdminSidebar';
 import AdminTopBar from '../components/AdminTopBar';
 import { apiPath, adminHeaders } from '../config';
 
 const AdminSettingsPage = () => {
   const { user, token } = useAuth();
+  const { showAlert } = useAlert();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSection, setActiveSection] = useState('general');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -128,9 +130,10 @@ const AdminSettingsPage = () => {
         body: JSON.stringify({ schedules })
       });
 
-      alert('Settings saved successfully!');
+      showAlert('Settings saved successfully!', 'Success', 'success');
     } catch (err) {
       console.error('Error saving settings:', err);
+      showAlert('Failed to save settings. Please try again.', 'Error', 'error');
     }
   };
 

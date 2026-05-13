@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useQueue } from '../context/QueueContext';
+import { useAlert } from '../context/AlertContext';
 import { apiPath } from '../config';
 
 const useWindowWidth = () => {
@@ -17,6 +18,7 @@ const useWindowWidth = () => {
 const ServicesPage = () => {
   const { user } = useAuth();
   const { queueError } = useQueue();
+  const { showAlert } = useAlert();
   const navigate = useNavigate();
   const [filter, setFilter] = useState('All Services');
   const width = useWindowWidth();
@@ -75,11 +77,11 @@ const ServicesPage = () => {
         navigate('/ticket');
       } else {
         const errData = await response.json();
-        alert(errData.error || 'Failed to take ticket. Please try again.');
+        showAlert(errData.error || 'Failed to take ticket. Please try again.', 'Error', 'error');
       }
     } catch (error) {
       console.error('Error taking ticket:', error);
-      alert('Network error. Please check your connection.');
+      showAlert('Network error. Please check your connection.', 'Connection Error', 'error');
     }
   };
 

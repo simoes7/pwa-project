@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useAlert } from '../context/AlertContext';
 import Logo from '../components/Logo';
 
 const useWindowWidth = () => {
@@ -20,6 +21,7 @@ const RegisterPage = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [agreeTerms, setAgreeTerms] = useState(false);
   const { register, authError, loginWithGoogle, setAuthError } = useAuth();
+  const { showAlert } = useAlert();
   const navigate = useNavigate();
   const width = useWindowWidth();
   const isMobile = width <= 768;
@@ -28,15 +30,15 @@ const RegisterPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (password !== confirmPassword) {
-      alert("Passwords do not match!");
+      showAlert("Passwords do not match!", "Registration Error", "error");
       return;
     }
     if (password.length < 8) {
-      alert("Password must be at least 8 characters long!");
+      showAlert("Password must be at least 8 characters long!", "Weak Password", "warning");
       return;
     }
     if (!agreeTerms) {
-      alert("Please agree to the Terms of Service.");
+      showAlert("Please agree to the Terms of Service.", "Agreement Required", "info");
       return;
     }
     const user = await register(name, email, password);

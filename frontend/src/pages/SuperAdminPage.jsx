@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useAuth } from '../context/AuthContext';
+import { useAlert } from '../context/AlertContext';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -36,6 +37,7 @@ const CATEGORIES = [
 const SuperAdminPage = () => {
   const { t, i18n } = useTranslation();
   const { user, authFetch } = useAuth();
+  const { showAlert, showConfirm } = useAlert();
   const [activeSection, setActiveSection] = useState('dashboard');
   const [services, setServices] = useState([]);
   const [adminAccounts, setAdminAccounts] = useState([]);
@@ -166,11 +168,11 @@ const SuperAdminPage = () => {
         setServiceForm(prev => ({ ...prev, [fieldName]: data.url }));
       } else {
         console.error('Failed to upload file');
-        alert('Failed to upload image. Please try again.');
+        showAlert('Failed to upload image. Please try again.', 'Upload Error', 'error');
       }
     } catch (error) {
       console.error('Error uploading file:', error);
-      alert('Error uploading image. Please check your connection.');
+      showAlert('Error uploading image. Please check your connection.', 'Connection Error', 'error');
     }
   };
 
@@ -242,7 +244,7 @@ const SuperAdminPage = () => {
   };
 
   const handleDeleteService = async (serviceId) => {
-    if (window.confirm('Are you sure you want to delete this service?')) {
+    showConfirm('Are you sure you want to delete this service? All associated data will be removed.', async () => {
       try {
         const response = await authFetch(`http://localhost:3001/services/${serviceId}`, {
           method: 'DELETE'
@@ -250,11 +252,13 @@ const SuperAdminPage = () => {
 
         if (response.ok) {
           fetchServices();
+          showAlert('Service deleted successfully.', 'Success', 'success');
         }
       } catch (error) {
         console.error('Error deleting service:', error);
+        showAlert('Failed to delete service. Please try again.', 'Error', 'error');
       }
-    }
+    }, 'Delete Service');
   };
 
   // Admin CRUD operations
@@ -312,7 +316,7 @@ const SuperAdminPage = () => {
   };
 
   const handleDeleteAdmin = async (adminId) => {
-    if (window.confirm('Are you sure you want to delete this admin account?')) {
+    showConfirm('Are you sure you want to delete this admin account?', async () => {
       try {
         const response = await authFetch(`http://localhost:3001/admin/accounts/${adminId}`, {
           method: 'DELETE'
@@ -320,11 +324,13 @@ const SuperAdminPage = () => {
 
         if (response.ok) {
           fetchAdminAccounts();
+          showAlert('Admin account deleted successfully.', 'Success', 'success');
         }
       } catch (error) {
         console.error('Error deleting admin:', error);
+        showAlert('Failed to delete admin. Please try again.', 'Error', 'error');
       }
-    }
+    }, 'Delete Admin');
   };
 
   const handlePromoteUser = async (userId, newRole) => {

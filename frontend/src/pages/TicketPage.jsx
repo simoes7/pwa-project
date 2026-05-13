@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useAlert } from '../context/AlertContext';
 import { apiPath } from '../config';
 
 const useWindowWidth = () => {
@@ -15,6 +16,7 @@ const useWindowWidth = () => {
 
 const TicketPage = () => {
   const { user } = useAuth();
+  const { showAlert, showConfirm } = useAlert();
   const navigate = useNavigate();
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -61,7 +63,26 @@ const TicketPage = () => {
 
   const updateTicketStatus = async (ticketId, newStatus) => {
     if (newStatus === 'cancelled') {
-      if (!window.confirm('Are you sure you want to cancel this ticket?')) return;
+      showConfirm('Are you sure you want to cancel this ticket? You will lose your position in the queue.', async () => {
+        try {
+          const response = await fetch(apiPath(`/tickets/${ticketId}/self`), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus, userId: user.id })
+          });
+          const data = await response.json();
+          if (response.ok) {
+            fetchTickets();
+            showActionMessage('Ticket cancelled');
+          } else {
+            showActionMessage(data.error || 'Action failed', true);
+          }
+        } catch (err) {
+          console.error('Error updating ticket:', err);
+          showActionMessage('Connection error', true);
+        }
+      }, 'Cancel Ticket');
+      return;
     }
     try {
       const response = await fetch(apiPath(`/tickets/${ticketId}/self`), {

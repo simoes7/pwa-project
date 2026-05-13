@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { MapContainer, TileLayer, Marker, Popup, Tooltip } from 'react-leaflet';
+import { useAlert } from '../context/AlertContext';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { apiPath } from '../config';
@@ -15,7 +16,26 @@ let DefaultIcon = L.icon({
     iconSize: [25, 41],
     iconAnchor: [12, 41]
 });
+
+let SelectedIcon = L.icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+    shadowUrl: iconShadow,
+    iconSize: [30, 48],
+    iconAnchor: [15, 48],
+    className: 'selected-marker-pulse'
+});
+
 L.Marker.prototype.options.icon = DefaultIcon;
+
+const MapController = ({ center }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (center) {
+      map.setView(center, 15, { animate: true });
+    }
+  }, [center, map]);
+  return null;
+};
 
 const useWindowWidth = () => {
   const [width, setWidth] = useState(window.innerWidth);
@@ -33,10 +53,12 @@ const MapPage = () => {
   const [isTakingTicket, setIsTakingTicket] = useState(false);
   const [activeTickets, setActiveTickets] = useState([]);
   const { user } = useAuth();
+  const { showAlert } = useAlert();
   const navigate = useNavigate();
   const width = useWindowWidth();
   const isMobile = width <= 1024;
   const isSmallMobile = width <= 640;
+  const [panelExpanded, setPanelExpanded] = useState(false);
   
   const fetchActiveTickets = useCallback(async () => {
     if (!user) return;
@@ -77,7 +99,7 @@ const MapPage = () => {
 
   const handleTakeTicket = async () => {
     if (!user) {
-      alert("Please login first to take a ticket.");
+      showAlert("Please login first to take a ticket.", "Authentication Required", "info");
       navigate('/login');
       return;
     }
@@ -91,15 +113,15 @@ const MapPage = () => {
       });
       
       if (response.ok) {
-        alert('Digital Token generated successfully!');
+        showAlert('Digital Token generated successfully!', 'Success', 'success');
         navigate('/ticket');
       } else {
         const errData = await response.json();
-        alert(errData.error || 'Failed to get a digital token.');
+        showAlert(errData.error || 'Failed to get a digital token.', 'Error', 'error');
       }
     } catch (error) {
       console.error('Error creating ticket:', error);
-      alert('Network error. Please check your connection.');
+      showAlert('Network error. Please check your connection.', 'Connection Error', 'error');
     } finally {
       setIsTakingTicket(false);
     }
@@ -119,15 +141,24 @@ const MapPage = () => {
     sidebar: {
       ...styles.sidebar,
       width: isMobile ? '100%' : '384px',
-      height: isMobile ? 'auto' : '100%',
+      height: isMobile ? (panelExpanded ? '70vh' : '280px') : '100%',
+      position: isMobile ? 'absolute' : 'relative',
+      bottom: isMobile ? '5rem' : '0', // 5rem is bottomNav height
+      left: 0,
+      zIndex: isMobile ? 1000 : 40,
       borderLeft: isMobile ? 'none' : '1px solid var(--surface-container-low)',
       borderTop: isMobile ? '1px solid var(--surface-container-low)' : 'none',
+      borderRadius: isMobile ? '2rem 2rem 0 0' : '0',
+      boxShadow: isMobile ? '0 -10px 40px rgba(13, 52, 89, 0.15)' : 'none',
+      transition: 'height 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+      overflowY: 'auto',
       order: isMobile ? 2 : 1,
     },
     mapCanvas: {
       ...styles.mapCanvas,
-      height: isMobile ? '400px' : '100%',
-      flex: isMobile ? 'none' : 1,
+      height: '100%',
+      width: '100%',
+      flex: 1,
       order: isMobile ? 1 : 2,
     },
     bottomNav: {
@@ -143,6 +174,24 @@ const MapPage = () => {
 
   return (
     <div style={styles.pageWrap}>
+      <style>{`
+        .selected-marker-pulse {
+          filter: drop-shadow(0 0 10px rgba(255, 0, 0, 0.5));
+          animation: marker-pulse 1.5s infinite ease-in-out;
+        }
+        @keyframes marker-pulse {
+          0% { transform: scale(1) translateY(0); }
+          50% { transform: scale(1.1) translateY(-5px); }
+          100% { transform: scale(1) translateY(0); }
+        }
+        .custom-tooltip {
+          background: var(--surface-container-high) !important;
+          border: 1px solid var(--primary) !important;
+          border-radius: 8px !important;
+          padding: 4px 8px !important;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+        }
+      `}</style>
       <main style={dynamicStyles.main}>
         
         {/* Map Canvas */}
@@ -158,14 +207,18 @@ const MapPage = () => {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               />
+              <MapController center={selectedService.lat && selectedService.lng ? [selectedService.lat, selectedService.lng] : null} />
               {dbServices.map(service => (
                 service.lat && service.lng && (
                   <Marker 
                     key={service.id} 
                     position={[service.lat, service.lng]}
+                    icon={selectedId === service.id ? SelectedIcon : DefaultIcon}
+                    zIndexOffset={selectedId === service.id ? 1000 : 0}
                     eventHandlers={{
                       click: () => {
                         setSelectedId(service.id);
+                        if (isMobile) setPanelExpanded(false);
                       },
                     }}
                   >
@@ -200,9 +253,17 @@ const MapPage = () => {
 
         {/* Sidebar */}
         <aside className="custom-scrollbar" style={dynamicStyles.sidebar}>
-          <div style={styles.sidebarInner}>
-            <header style={{ ...styles.sidebarHeader, marginBottom: '1.5rem' }}>
-              <h1 className="headline" style={{ ...styles.sidebarTitle, fontSize: isSmallMobile ? '1.5rem' : '1.875rem' }}>Nearby Services</h1>
+          {isMobile && (
+            <div 
+              style={styles.dragHandleWrap} 
+              onClick={() => setPanelExpanded(!panelExpanded)}
+            >
+              <div style={styles.dragHandle}></div>
+            </div>
+          )}
+          <div style={{...styles.sidebarInner, paddingTop: isMobile ? '0.5rem' : '2rem'}}>
+            <header style={{ ...styles.sidebarHeader, marginBottom: isMobile ? '1rem' : '1.5rem' }}>
+              <h1 className="headline" style={{ ...styles.sidebarTitle, fontSize: isSmallMobile ? '1.25rem' : '1.875rem' }}>Nearby Services</h1>
               <p style={styles.sidebarSubtitle}>Real-time location tracking.</p>
             </header>
 
@@ -268,7 +329,10 @@ const MapPage = () => {
                   <div 
                     key={service.id} 
                     style={styles.nearbyItem}
-                    onClick={() => setSelectedId(service.id)}
+                    onClick={() => {
+                      setSelectedId(service.id);
+                      if (isMobile) setPanelExpanded(false);
+                    }}
                   >
                     <div style={{ 
                       ...styles.nearbyIcon, 
@@ -635,6 +699,23 @@ const styles = {
     fontSize: '0.625rem',
     fontWeight: '800',
     textTransform: 'uppercase'
+  },
+  dragHandleWrap: {
+    width: '100%',
+    display: 'flex',
+    justifyContent: 'center',
+    padding: '1rem 0',
+    cursor: 'pointer',
+    position: 'sticky',
+    top: 0,
+    backgroundColor: 'white',
+    zIndex: 10
+  },
+  dragHandle: {
+    width: '40px',
+    height: '4px',
+    backgroundColor: 'var(--surface-container-highest)',
+    borderRadius: '2px'
   }
 };
 
