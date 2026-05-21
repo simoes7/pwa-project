@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Queue - You are Offline</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --primary: #0055d7;
+      --primary-hover: #004abe;
+      --background: #f8f9ff;
+      --text: #0d3459;
+      --text-muted: #5d7da6;
+      --surface: #ffffff;
+      --surface-container: #e5eeff;
+      --border-radius: 1.5rem;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #5e8bff;
+        --primary-hover: #abbfff;
+        --background: #000f21;
+        --text: #eff4ff;
+        --text-muted: #94b4e0;
+        --surface: #0d3459;
+        --surface-container: #1b2e4b;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--background);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 2rem;
+      text-align: center;
+      overflow-x: hidden;
+    }
+
+    h1, h2, h3 {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    .container {
+      max-width: 500px;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      padding: 2.5rem;
+      border-radius: var(--border-radius);
+      box-shadow: 0 20px 40px rgba(13, 52, 89, 0.05);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.5rem;
+      position: relative;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .container {
+        background: rgba(13, 52, 89, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      }
+    }
+
+    .icon-wrapper {
+      position: relative;
+      width: 100px;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--surface-container);
+      border-radius: 50%;
+      color: var(--primary);
+      margin-bottom: 0.5rem;
+    }
+
+    .icon-wrapper .wifi-icon {
+      font-size: 3.5rem;
+      animation: float 3s ease-in-out infinite;
+    }
+
+    .icon-wrapper::after {
+      content: '';
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border: 2px solid var(--primary);
+      border-radius: 50%;
+      animation: pulse 2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+      opacity: 0;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 0.6; }
+      100% { transform: scale(1.4); opacity: 0; }
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    p {
+      color: var(--text-muted);
+      font-size: 1rem;
+      line-height: 1.6;
+    }
+
+    .btn {
+      background: var(--primary);
+      color: #ffffff;
+      border: none;
+      padding: 0.875rem 2rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 9999px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      box-shadow: 0 10px 20px rgba(0, 85, 215, 0.15);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn:hover {
+      background: var(--primary-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 24px rgba(0, 85, 215, 0.25);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .game-section {
+      width: 100%;
+      border-top: 1px solid var(--surface-container);
+      padding-top: 1.5rem;
+      margin-top: 0.5rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .game-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .game-box {
+      width: 100%;
+      height: 120px;
+      background: var(--surface-container);
+      border-radius: 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      border: 2px dashed rgba(93, 125, 166, 0.2);
+    }
+
+    .game-status {
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+
+    .game-score {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+    }
+
+    .game-bg-flash {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.1s ease;
+    }
+
+    .pulse-status {
+      animation: text-pulse 1s infinite alternate;
+    }
+
+    @keyframes text-pulse {
+      0% { opacity: 0.6; }
+      100% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="icon-wrapper">
+      <span class="material-symbols-outlined wifi-icon">wifi_off</span>
+    </div>
+
+    <h1>Connection Lost</h1>
+    <p>It looks like you've gone offline. Don't worry, once you're back online we'll automatically reconnect you to the Smart Queue.</p>
+
+    <button class="btn" onclick="checkConnection()">
+      <span class="material-symbols-outlined">refresh</span>
+      Try Reconnecting
+    </button>
+
+    <!-- Mini-Game to pass the time -->
+    <div class="game-section">
+      <h3 class="game-title">⚡ Offline Queue Reflex Game ⚡</h3>
+      <p style="font-size: 0.8rem; margin-bottom: 0.25rem;">Tap the box when it turns BRIGHT GREEN! Let's see your reaction speed!</p>
+      <div id="gameBox" class="game-box" onclick="onGameBoxClick()">
+        <div id="gameStatus" class="game-status pulse-status">Tap to Start</div>
+        <div id="gameScore" class="game-score">Best: -- | Current: --</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Offline Auto-Redirect once online
+    window.addEventListener('online', function() {
+      showConnectedStateAndRedirect();
+    });
+
+    function checkConnection() {
+      const btn = document.querySelector('.btn');
+      btn.innerHTML = '<span class="material-symbols-outlined" style="animation: spin 1s infinite linear">sync</span> Checking...';
+      
+      // Spinner styling dynamically
+      if (!document.getElementById('spin-style')) {
+        const style = document.createElement('style');
+        style.id = 'spin-style';
+        style.innerHTML = '@keyframes spin { 100% { transform: rotate(360deg); } }';
+        document.head.appendChild(style);
+      }
+
+      setTimeout(() => {
+        if (navigator.onLine) {
+          showConnectedStateAndRedirect();
+        } else {
+          btn.innerHTML = '<span class="material-symbols-outlined">wifi_off</span> Still Offline';
+          setTimeout(() => {
+            btn.innerHTML = '<span class="material-symbols-outlined">refresh</span> Try Reconnecting';
+          }, 1500);
+        }
+      }, 800);
+    }
+
+    function showConnectedStateAndRedirect() {
+      const container = document.querySelector('.container');
+      container.style.transform = 'scale(0.95)';
+      container.style.opacity = '0.8';
+      document.querySelector('h1').innerText = 'Back Online!';
+      document.querySelector('p').innerText = 'Reconnecting you to the Smart Queue server now...';
+      document.querySelector('.icon-wrapper').style.color = '#10b981';
+      document.querySelector('.icon-wrapper .wifi-icon').innerText = 'wifi';
+      
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1000);
+    }
+
+    // Interactive Game Logic
+    let gameState = 'idle'; // idle, waiting, green, clicked
+    let gameTimeout = null;
+    let greenTime = 0;
+    let bestScore = localStorage.getItem('reflex_best') || '--';
+    const gameBox = document.getElementById('gameBox');
+    const gameStatus = document.getElementById('gameStatus');
+    const gameScore = document.getElementById('gameScore');
+
+    if (bestScore !== '--') {
+      gameScore.innerText = `Best: ${bestScore}ms | Current: --`;
+    }
+
+    function onGameBoxClick() {
+      if (gameState === 'idle' || gameState === 'clicked') {
+        // Start game
+        gameState = 'waiting';
+        gameBox.style.background = 'rgba(234, 179, 8, 0.15)';
+        gameBox.style.borderColor = '#eab308';
+        gameStatus.innerText = 'Wait for Green...';
+        gameStatus.className = 'game-status';
+        
+        const randomDelay = 1500 + Math.random() * 3000; // 1.5s to 4.5s
+        gameTimeout = setTimeout(() => {
+          gameState = 'green';
+          gameBox.style.background = 'rgba(16, 185, 129, 0.2)';
+          gameBox.style.borderColor = '#10b981';
+          gameStatus.innerText = 'TAP NOW!';
+          gameStatus.style.color = '#10b981';
+          greenTime = Date.now();
+        }, randomDelay);
+      } else if (gameState === 'waiting') {
+        // Clicked too early
+        clearTimeout(gameTimeout);
+        gameState = 'idle';
+        gameBox.style.background = 'rgba(239, 68, 68, 0.15)';
+        gameBox.style.borderColor = '#ef4444';
+        gameStatus.innerText = 'Too Early! Tap to restart.';
+        gameStatus.style.color = '#ef4444';
+      } else if (gameState === 'green') {
+        // Clicked on time!
+        const reactionTime = Date.now() - greenTime;
+        gameState = 'clicked';
+        gameBox.style.background = 'var(--surface-container)';
+        gameBox.style.borderColor = 'rgba(93, 125, 166, 0.2)';
+        
+        if (bestScore === '--' || reactionTime < parseInt(bestScore)) {
+          bestScore = reactionTime;
+          localStorage.setItem('reflex_best', bestScore);
+        }
+        
+        gameStatus.innerText = `Success: ${reactionTime} ms`;
+        gameStatus.style.color = 'var(--text)';
+        gameScore.innerText = `Best: ${bestScore}ms | Current: ${reactionTime}ms`;
+      }
+    }
+  </script>
+</body>
+</html>
