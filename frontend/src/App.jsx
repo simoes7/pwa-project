@@ -5,23 +5,22 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import BottomNav from './components/BottomNav';
 
-// Pages
-import LandingPage from './pages/LandingPage';
-import ServicesPage from './pages/ServicesPage';
-import TicketPage from './pages/TicketPage';
-import QueueTrackingPage from './pages/QueueTrackingPage';
-import MapPage from './pages/MapPage';
-import AdminDashboardPage from './pages/AdminDashboardPage';
-import AdminAnalyticsPage from './pages/AdminAnalyticsPage';
-import AdminControlPage from './pages/AdminControlPage';
-import AdminServicesPage from './pages/AdminServicesPage';
-import AdminSettingsPage from './pages/AdminSettingsPage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import AuthSuccessPage from './pages/AuthSuccessPage';
-import SuperAdminPage from './pages/SuperAdminPage';
-
-import SupportPage from './pages/SupportPage';
+// Pages (Lazy loaded for optimized bundle sizes)
+const LandingPage = React.lazy(() => import('./pages/LandingPage'));
+const ServicesPage = React.lazy(() => import('./pages/ServicesPage'));
+const TicketPage = React.lazy(() => import('./pages/TicketPage'));
+const QueueTrackingPage = React.lazy(() => import('./pages/QueueTrackingPage'));
+const MapPage = React.lazy(() => import('./pages/MapPage'));
+const AdminDashboardPage = React.lazy(() => import('./pages/AdminDashboardPage'));
+const AdminAnalyticsPage = React.lazy(() => import('./pages/AdminAnalyticsPage'));
+const AdminControlPage = React.lazy(() => import('./pages/AdminControlPage'));
+const AdminServicesPage = React.lazy(() => import('./pages/AdminServicesPage'));
+const AdminSettingsPage = React.lazy(() => import('./pages/AdminSettingsPage'));
+const LoginPage = React.lazy(() => import('./pages/LoginPage'));
+const RegisterPage = React.lazy(() => import('./pages/RegisterPage'));
+const AuthSuccessPage = React.lazy(() => import('./pages/AuthSuccessPage'));
+const SuperAdminPage = React.lazy(() => import('./pages/SuperAdminPage'));
+const SupportPage = React.lazy(() => import('./pages/SupportPage'));
 
 // Guards
 import ProtectedRoute from './components/ProtectedRoute';
@@ -55,73 +54,85 @@ function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
         >
-          <Routes location={location} key={location.pathname}>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/services" element={<ServicesPage />} />
-            <Route path="/tracking" element={<QueueTrackingPage />} />
-            <Route path="/map" element={<MapPage />} />
-            <Route path="/support" element={<SupportPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route path="/auth-success" element={<AuthSuccessPage />} />
-            <Route
-              path="/super-admin"
-              element={
-                <ProtectedRoute requireRole="super_admin">
-                  <SuperAdminPage />
-                </ProtectedRoute>
-              }
-            />
+          <React.Suspense
+            fallback={
+              <div className="flex flex-col items-center justify-center min-h-[60vh] py-20 font-['Plus_Jakarta_Sans']">
+                <div className="relative w-16 h-16">
+                  <div className="absolute inset-0 rounded-full border-4 border-indigo-100 dark:border-indigo-950"></div>
+                  <div className="absolute inset-0 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin"></div>
+                </div>
+                <p className="mt-4 text-sm font-semibold text-slate-500 animate-pulse tracking-wide uppercase">Loading operational portal...</p>
+              </div>
+            }
+          >
+            <Routes location={location} key={location.pathname}>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/services" element={<ServicesPage />} />
+              <Route path="/tracking" element={<QueueTrackingPage />} />
+              <Route path="/map" element={<MapPage />} />
+              <Route path="/support" element={<SupportPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/auth-success" element={<AuthSuccessPage />} />
+              <Route
+                path="/super-admin"
+                element={
+                  <ProtectedRoute requireRole="super_admin">
+                    <SuperAdminPage />
+                  </ProtectedRoute>
+                }
+              />
 
-            <Route
-              path="/ticket"
-              element={
-                <ProtectedRoute>
-                  <TicketPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin"
-              element={
-                <ProtectedRoute requireRole="admin">
-                  <AdminDashboardPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/analytics"
-              element={
-                <ProtectedRoute requireRole="admin">
-                  <AdminAnalyticsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/control"
-              element={
-                <ProtectedRoute requireRole="admin">
-                  <AdminControlPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/services"
-              element={
-                <ProtectedRoute requireRole="admin">
-                  <AdminServicesPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/settings"
-              element={
-                <ProtectedRoute requireRole="admin">
-                  <AdminSettingsPage />
-                </ProtectedRoute>
-              }
-            />
-          </Routes>
+              <Route
+                path="/ticket"
+                element={
+                  <ProtectedRoute>
+                    <TicketPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedRoute requireRole="admin">
+                    <AdminDashboardPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/analytics"
+                element={
+                  <ProtectedRoute requireRole="admin">
+                    <AdminAnalyticsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/control"
+                element={
+                  <ProtectedRoute requireRole="admin">
+                    <AdminControlPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/services"
+                element={
+                  <ProtectedRoute requireRole="admin">
+                    <AdminServicesPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/settings"
+                element={
+                  <ProtectedRoute requireRole="admin">
+                    <AdminSettingsPage />
+                  </ProtectedRoute>
+                }
+              />
+            </Routes>
+          </React.Suspense>
         </motion.main>
       </AnimatePresence>
       {!isAdminPage && !isMapPage && <Footer />}

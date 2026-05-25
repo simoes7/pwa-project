@@ -116,7 +116,7 @@ const ServicesPage = () => {
         {uniqueCategories.map(f => (
           <button
             key={f}
-            style={{ ...styles.filterBtn, ...(filter === f ? styles.filterBtnActive : {}) }}
+            className={`category-filter-btn ${filter === f ? 'active' : ''}`}
             onClick={() => setFilter(f)}
           >
             {f}
@@ -138,22 +138,36 @@ const ServicesPage = () => {
             const waitTime = inQueue * service.estimated_wait_time + service.estimated_wait_time;
 
             return (
-              <div key={service.id} className="bg-blue-50/50 dark:bg-slate-900/50 p-6 rounded-[2rem] flex flex-col justify-between min-h-[300px] transition-all hover:-translate-y-1 hover:shadow-xl group border border-blue-100 dark:border-slate-800 relative overflow-hidden" style={{ backgroundColor: service.color_theme ? `${service.color_theme}10` : '', gridColumn: isMobile ? 'span 12' : 'span 4' }}>
+              <div key={service.id} className="bg-blue-50/50 dark:bg-slate-900/50 p-6 rounded-[2rem] flex flex-col justify-between min-h-[300px] transition-all hover:-translate-y-1.5 hover:shadow-xl group border border-blue-100 dark:border-slate-800 relative overflow-hidden" style={{ backgroundColor: service.color_theme ? `${service.color_theme}10` : '', gridColumn: isMobile ? 'span 12' : 'span 4' }}>
                 {service.cover_image_url && (
-                  <div className="absolute top-0 left-0 right-0 h-28 opacity-20 bg-cover bg-center" style={{ backgroundImage: `url(${service.cover_image_url})` }}></div>
+                  <>
+                    <div className="absolute top-0 left-0 right-0 h-32 bg-cover bg-center opacity-15" style={{ backgroundImage: `url(${service.cover_image_url})` }}></div>
+                    <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-transparent to-white dark:to-slate-900 opacity-80"></div>
+                  </>
                 )}
                 
                 <div className="relative z-10 flex flex-col h-full">
                   <div className="flex justify-between items-start mb-5">
                     {service.logo_url ? (
-                      <div className="w-16 h-16 rounded-2xl overflow-hidden bg-white shadow-sm border border-slate-100 flex items-center justify-center p-1">
+                      <div className="w-16 h-16 rounded-2xl overflow-hidden bg-white shadow-sm border border-slate-100 flex items-center justify-center p-1 flex-shrink-0">
                         <img src={service.logo_url} alt={service.name} className="w-full h-full object-contain" />
                       </div>
-                    ) : (
-                      <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-md" style={{ backgroundColor: service.color_theme || 'var(--primary)' }}>
-                        <span className="material-symbols-outlined text-3xl">{service.icon || 'hub'}</span>
-                      </div>
-                    )}
+                    ) : (() => {
+                      const iconText = service.icon || 'hub';
+                      const isInitials = iconText === iconText.toUpperCase() && iconText.length <= 4 && !/^\d+$/.test(iconText);
+                      return (
+                        <div 
+                          className="w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-md flex-shrink-0 font-['Plus_Jakarta_Sans'] font-extrabold" 
+                          style={{ backgroundColor: service.color_theme || 'var(--primary)' }}
+                        >
+                          {isInitials ? (
+                            <span style={{ fontSize: iconText.length > 2 ? '1.1rem' : '1.375rem', letterSpacing: '-0.03em' }}>{iconText}</span>
+                          ) : (
+                            <span className="material-symbols-outlined text-3xl">{iconText}</span>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <div className="flex gap-2">
                       {service.is_fast_track_available && (
                         <div className="bg-amber-100 text-amber-800 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1">
@@ -190,7 +204,7 @@ const ServicesPage = () => {
                   </div>
 
                   <button
-                    className={`w-full py-3.5 rounded-xl font-bold transition-all shadow-sm flex items-center justify-center gap-2 ${(service.is_open && !hasActiveTicket(service.id)) ? 'bg-indigo-600 hover:bg-indigo-700 text-white hover:shadow-md' : 'bg-slate-200 dark:bg-slate-800 text-slate-500 cursor-not-allowed'}`}
+                    className={`w-full py-3.5 rounded-xl font-bold transition-all shadow-sm flex items-center justify-center gap-2 ${(service.is_open && !hasActiveTicket(service.id)) ? 'primary-gradient text-white hover:shadow-lg hover:shadow-indigo-500/10' : 'bg-slate-200 dark:bg-slate-800 text-slate-500 cursor-not-allowed'}`}
                     onClick={() => service.is_open && !hasActiveTicket(service.id) && handleTakeTicket(service.id)}
                     disabled={hasActiveTicket(service.id) || !service.is_open}
                   >
@@ -216,32 +230,7 @@ const ServicesPage = () => {
             );
           })}
 
-        {/* Custom Card */}
-        <div className="glass-card" style={{
-          ...styles.wideCard,
-          gridColumn: isMobile ? 'span 12' : 'span 8',
-          flexDirection: isMobile ? 'column' : 'row'
-        }}>
-          <div style={styles.wideContent}>
-            <h3 className="headline" style={styles.cardTitleLarge}>Can't find your service?</h3>
-            <p style={{ ...styles.cardDescSmall, fontSize: '1.1rem', marginBottom: '2.5rem' }}>
-              Our help desk is available for custom inquiries and guided support for first-time users.
-            </p>
-            <div style={styles.wideLinks}>
-              <a href="#" style={{ ...styles.wideLink, color: 'var(--primary)' }}>
-                Support Center <span className="material-symbols-outlined">arrow_forward</span>
-              </a>
-              <a href="#" style={{ ...styles.wideLink, color: 'var(--secondary)' }}>
-                Find on Map <span className="material-symbols-outlined">map</span>
-              </a>
-            </div>
-          </div>
-          {!isMobile && (
-            <div style={styles.wideGraphic}>
-              <span className="material-symbols-outlined" style={{ fontSize: '6rem', color: 'var(--outline-variant)', opacity: 0.5 }}>help_center</span>
-            </div>
-          )}
-        </div>
+
 
       </div>
 

@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useAuth } from '../context/AuthContext';
+import { apiPath, adminHeaders } from '../config';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -33,9 +35,43 @@ const CATEGORIES = [
   'Commerce'
 ];
 
+const getInitials = (name) => {
+  if (!name) return 'SA';
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+};
+
+const MapPicker = ({ lat, lng, onChange }) => {
+  const MapEvents = () => {
+    const map = useMapEvents({
+      click(e) {
+        onChange(e.latlng.lat, e.latlng.lng);
+      },
+    });
+
+    useEffect(() => {
+      if (lat && lng) {
+        map.setView([lat, lng], 15);
+      }
+    }, [lat, lng, map]);
+
+    return null;
+  };
+
+  return (
+    <div className="h-64 w-full rounded-2xl overflow-hidden shadow-inner border border-outline-variant/30">
+      <MapContainer center={[lat || 31.6295, lng || -7.9811]} zoom={13} style={{ height: '100%', width: '100%' }}>
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        <Marker position={[lat, lng]} />
+        <MapEvents />
+      </MapContainer>
+    </div>
+  );
+};
+
 const SuperAdminPage = () => {
+  const navigate = useNavigate();
   const { t, i18n } = useTranslation();
-  const { user, authFetch } = useAuth();
+  const { user, token, authFetch, logout } = useAuth();
   const [activeSection, setActiveSection] = useState('dashboard');
   const [services, setServices] = useState([]);
   const [adminAccounts, setAdminAccounts] = useState([]);
@@ -46,17 +82,24 @@ const SuperAdminPage = () => {
   const [editingAdmin, setEditingAdmin] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [analyticsData, setAnalyticsData] = useState(null);
+  const [stats, setStats] = useState({ total_tickets: 0, active_tickets: 0, completed_tickets: 0, satisfaction: 0 });
+  const [isAddressDirty, setIsAddressDirty] = useState(false);
 
-  // Fetch analytics data
-  const fetchAnalytics = async () => {
+
+
+  const fetchData = useCallback(async () => {
     try {
-      const response = await authFetch('http://localhost:3001/admin/analytics');
+      const response = await authFetch(apiPath('/admin/analytics'));
       const data = await response.json();
-      setAnalyticsData(data);
+      if (response.ok) {
+        setAnalyticsData(data);
+      } else {
+        console.error('Analytics fetch failed:', data);
+      }
     } catch (error) {
       console.error('Error fetching analytics:', error);
     }
-  };
+  }, [authFetch]);
 
   // Service form state
   const [serviceForm, setServiceForm] = useState({
@@ -76,26 +119,37 @@ const SuperAdminPage = () => {
     lng: -7.9811
   });
 
-  const MapPicker = ({ lat, lng, onChange }) => {
-    const MapEvents = () => {
-      useMapEvents({
-        click(e) {
-          onChange(e.latlng.lat, e.latlng.lng);
-        },
+  const geocodeServiceAddress = async (addr) => {
+    if (!addr) return;
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&limit=1`, {
+        headers: { 'User-Agent': 'SmartQueue/1.0' }
       });
-      return null;
-    };
-
-    return (
-      <div className="h-64 w-full rounded-2xl overflow-hidden shadow-inner border border-outline-variant/30">
-        <MapContainer center={[lat || 31.6295, lng || -7.9811]} zoom={13} style={{ height: '100%', width: '100%' }}>
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          <Marker position={[lat, lng]} />
-          <MapEvents />
-        </MapContainer>
-      </div>
-    );
+      const data = await response.json();
+      if (data && data.length > 0) {
+        const { lat, lon } = data[0];
+        setServiceForm(prev => ({
+          ...prev,
+          lat: parseFloat(lat),
+          lng: parseFloat(lon)
+        }));
+      }
+    } catch (error) {
+      console.error('Geocoding error:', error);
+    }
   };
+
+  // Auto-geocode address when typing stops (1.2s debounce)
+  useEffect(() => {
+    if (!isAddressDirty || !serviceForm.address || !serviceForm.address.trim()) return;
+
+    const delayDebounce = setTimeout(() => {
+      geocodeServiceAddress(serviceForm.address);
+      setIsAddressDirty(false);
+    }, 1200);
+
+    return () => clearTimeout(delayDebounce);
+  }, [serviceForm.address, isAddressDirty]);
 
   // Admin form state
   const [adminForm, setAdminForm] = useState({
@@ -111,9 +165,13 @@ const SuperAdminPage = () => {
   // Fetch services
   const fetchServices = async () => {
     try {
-      const response = await authFetch('http://localhost:3001/services');
+      const response = await authFetch(apiPath('/services'));
       const data = await response.json();
-      setServices(data);
+      if (response.ok) {
+        setServices(data);
+      } else {
+        console.error('Services fetch failed:', data);
+      }
     } catch (error) {
       console.error('Error fetching services:', error);
     }
@@ -122,9 +180,13 @@ const SuperAdminPage = () => {
   // Fetch admin accounts
   const fetchAdminAccounts = async () => {
     try {
-      const response = await authFetch('http://localhost:3001/admin/accounts');
+      const response = await authFetch(apiPath('/admin/accounts'));
       const data = await response.json();
-      setAdminAccounts(data);
+      if (response.ok) {
+        setAdminAccounts(data);
+      } else {
+        console.error('Admin accounts fetch failed:', data);
+      }
     } catch (error) {
       console.error('Error fetching admin accounts:', error);
     }
@@ -132,9 +194,13 @@ const SuperAdminPage = () => {
 
   const fetchRegularUsers = async () => {
     try {
-      const response = await authFetch('http://localhost:3001/users');
+      const response = await authFetch(apiPath('/users'));
       const data = await response.json();
-      setRegularUsers(data);
+      if (response.ok) {
+        setRegularUsers(data);
+      } else {
+        console.error('Regular users fetch failed:', data);
+      }
     } catch (error) {
       console.error('Error fetching users:', error);
     }
@@ -144,8 +210,8 @@ const SuperAdminPage = () => {
     fetchServices();
     fetchAdminAccounts();
     fetchRegularUsers();
-    fetchAnalytics();
-  }, []);
+    fetchData();
+  }, [fetchData]);
 
   // Service CRUD operations
   const handleFileUpload = async (event, fieldName) => {
@@ -156,7 +222,7 @@ const SuperAdminPage = () => {
     formData.append('image', file);
 
     try {
-      const response = await authFetch('http://localhost:3001/upload', {
+      const response = await authFetch(apiPath('/upload'), {
         method: 'POST',
         body: formData,
       });
@@ -176,7 +242,7 @@ const SuperAdminPage = () => {
 
   const handleCreateService = async () => {
     try {
-      const response = await authFetch('http://localhost:3001/services', {
+      const response = await authFetch(apiPath('/services'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(serviceForm)
@@ -209,7 +275,7 @@ const SuperAdminPage = () => {
 
   const handleUpdateService = async () => {
     try {
-      const response = await authFetch(`http://localhost:3001/services/${editingService.id}/info`, {
+      const response = await authFetch(apiPath(`/services/${editingService.id}/info`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(serviceForm)
@@ -244,7 +310,7 @@ const SuperAdminPage = () => {
   const handleDeleteService = async (serviceId) => {
     if (window.confirm('Are you sure you want to delete this service?')) {
       try {
-        const response = await authFetch(`http://localhost:3001/services/${serviceId}`, {
+        const response = await authFetch(apiPath(`/services/${serviceId}`), {
           method: 'DELETE'
         });
 
@@ -260,7 +326,7 @@ const SuperAdminPage = () => {
   // Admin CRUD operations
   const handleCreateAdmin = async () => {
     try {
-      const response = await authFetch('http://localhost:3001/admin/accounts', {
+      const response = await authFetch(apiPath('/admin/accounts'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(adminForm)
@@ -286,7 +352,7 @@ const SuperAdminPage = () => {
 
   const handleUpdateAdmin = async () => {
     try {
-      const response = await authFetch(`http://localhost:3001/admin/accounts/${editingAdmin.id}`, {
+      const response = await authFetch(apiPath(`/admin/accounts/${editingAdmin.id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(adminForm)
@@ -314,7 +380,7 @@ const SuperAdminPage = () => {
   const handleDeleteAdmin = async (adminId) => {
     if (window.confirm('Are you sure you want to delete this admin account?')) {
       try {
-        const response = await authFetch(`http://localhost:3001/admin/accounts/${adminId}`, {
+        const response = await authFetch(apiPath(`/admin/accounts/${adminId}`), {
           method: 'DELETE'
         });
 
@@ -329,7 +395,7 @@ const SuperAdminPage = () => {
 
   const handlePromoteUser = async (userId, newRole) => {
     try {
-      const response = await authFetch(`http://localhost:3001/users/${userId}/role`, {
+      const response = await authFetch(apiPath(`/users/${userId}/role`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role: newRole })
@@ -344,6 +410,7 @@ const SuperAdminPage = () => {
   };
 
   const openServiceModal = (service = null) => {
+    setIsAddressDirty(false);
     if (service) {
       setEditingService(service);
       setServiceForm({
@@ -416,8 +483,10 @@ const SuperAdminPage = () => {
   };
 
 
+  const isRTL = i18n.language === 'ar';
+
   return (
-    <div className="bg-background text-on-surface selection:bg-primary-container selection:text-on-primary-container font-['Inter'] flex min-h-screen">
+    <div dir={isRTL ? 'rtl' : 'ltr'} className="bg-background text-on-surface selection:bg-primary-container selection:text-on-primary-container font-['Inter'] flex min-h-screen">
       {/* SideNavBar */}
       <aside className="h-screen w-72 ltr:rounded-r-[3rem] rtl:rounded-l-[3rem] fixed ltr:left-0 rtl:right-0 top-0 bg-slate-50 dark:bg-slate-950 shadow-[12px_0_40px_rgba(13,52,89,0.04)] z-50 flex flex-col py-8 font-['Plus_Jakarta_Sans'] tracking-tight ltr:border-r rtl:border-l border-slate-200 dark:border-slate-800">
         <div className="px-8 mb-10">
@@ -456,18 +525,7 @@ const SuperAdminPage = () => {
             <span className="material-symbols-outlined">monitoring</span>
             <span>{t('common.analytics')}</span>
           </button>
-          <button
-            onClick={() => setActiveSection('logs')}
-            className={`w-full flex items-center gap-3 px-6 py-4 transition-all duration-300 rounded-xl ${activeSection === 'logs' ? 'text-indigo-600 dark:text-indigo-400 font-bold bg-white dark:bg-slate-800 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 scale-95 active:scale-90 transition-transform'}`}>
-            <span className="material-symbols-outlined">history</span>
-            <span>{t('common.activityLogs')}</span>
-          </button>
-          <button
-            onClick={() => setActiveSection('settings')}
-            className={`w-full flex items-center gap-3 px-6 py-4 transition-all duration-300 rounded-xl ${activeSection === 'settings' ? 'text-indigo-600 dark:text-indigo-400 font-bold bg-white dark:bg-slate-800 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 scale-95 active:scale-90 transition-transform'}`}>
-            <span className="material-symbols-outlined">settings</span>
-            <span>{t('common.settings')}</span>
-          </button>
+
         </nav>
         <div className="px-6 mt-auto">
           <button
@@ -482,38 +540,54 @@ const SuperAdminPage = () => {
       {/* Main Content Shell */}
       <main className="ltr:ml-72 rtl:mr-72 min-h-screen flex-1">
         {/* TopAppBar */}
-        <header className="sticky top-0 w-full z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl flex justify-between items-center px-8 py-4 font-['Plus_Jakarta_Sans'] font-medium">
-          <div className="flex items-center gap-6 flex-1">
-            <div className="relative w-96">
-              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">search</span>
+        <header className="sticky top-0 w-full z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800/80 flex justify-between items-center px-8 py-4 font-['Plus_Jakarta_Sans'] font-medium">
+          <div className="flex items-center gap-6 flex-1 min-w-0">
+            <div className="relative w-full max-w-md">
+              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
               <input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-slate-100 border-none rounded-full py-2.5 pl-12 pr-4 text-sm focus:ring-2 focus:ring-indigo-500/20 transition-all outline-none"
+                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 focus:border-indigo-500/60 focus:bg-white dark:focus:bg-slate-950 rounded-full py-2.5 pl-12 pr-4 text-sm focus:ring-4 focus:ring-indigo-500/10 transition-all duration-200 outline-none font-semibold text-slate-800 dark:text-slate-200 shadow-sm"
                 placeholder={t('common.search')}
                 type="text"
               />
             </div>
           </div>
           <div className="flex items-center gap-6">
-            <LanguageSwitcher />
-            <div className="flex items-center gap-4">
-              <button className="w-10 h-10 flex items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 transition-colors">
-                <span className="material-symbols-outlined">notifications</span>
-              </button>
-              <button className="w-10 h-10 flex items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 transition-colors">
-                <span className="material-symbols-outlined">help_outline</span>
-              </button>
+            <button
+              onClick={() => navigate('/')}
+              className="w-10 h-10 flex items-center justify-center rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-indigo-600 transition-all duration-200"
+              title="Home"
+            >
+              <span className="material-symbols-outlined text-[1.375rem] font-light">home</span>
+            </button>
+            
+            <div className="flex items-center">
+              <LanguageSwitcher />
             </div>
-            <div className="h-8 w-[1px] bg-slate-200"></div>
-            <div className="flex items-center gap-3 cursor-pointer group">
+
+            <button className="w-10 h-10 flex items-center justify-center rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-indigo-600 transition-all duration-200">
+              <span className="material-symbols-outlined text-[1.375rem] font-light">help_outline</span>
+            </button>
+            <div className="flex items-center gap-3 bg-slate-50/60 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 rounded-full p-1.5 pl-3 pr-2.5 shadow-sm hover:shadow-md transition-all duration-200">
               <div className="text-right">
-                <p className="text-sm font-bold text-slate-900 leading-tight">{user?.name || 'Super Admin'}</p>
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">Support</p>
+                <p className="text-xs font-extrabold text-slate-900 dark:text-slate-100 leading-tight">{user?.name || 'Super Admin'}</p>
+                <p className="text-[9px] text-indigo-600 dark:text-indigo-400 font-black uppercase tracking-wider mt-0.5">Support</p>
               </div>
-              <div className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm flex items-center justify-center bg-indigo-600 text-white font-bold text-sm">
+              
+              <div className="w-8 h-8 rounded-full border-2 border-white dark:border-slate-800 shadow-sm flex items-center justify-center bg-indigo-600 text-white font-black text-xs">
                 {getInitials(user?.name || 'Super Admin')}
               </div>
+              
+              <div className="h-5 w-[1px] bg-slate-200 dark:bg-slate-700"></div>
+              
+              <button
+                onClick={() => { logout(); navigate('/login'); }}
+                className="w-8 h-8 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-600 hover:text-rose-700 rounded-full transition-all duration-200 flex items-center justify-center"
+                title="Logout"
+              >
+                <span className="material-symbols-outlined text-[1.2rem] font-semibold">logout</span>
+              </button>
             </div>
           </div>
         </header>
@@ -889,14 +963,7 @@ const SuperAdminPage = () => {
             </div>
           )}
 
-          {/* Placeholders for other sections */}
-          {(activeSection === 'logs' || activeSection === 'settings') && (
-            <div className="text-center py-20 bg-surface-container-lowest rounded-2xl border border-surface-container-low shadow-sm">
-              <span className="material-symbols-outlined text-6xl text-outline-variant mb-4">{activeSection === 'logs' ? 'history' : 'settings'}</span>
-              <h3 className="text-2xl font-bold text-on-surface mb-2 capitalize">{activeSection}</h3>
-              <p className="text-on-surface-variant">This section is currently under construction.</p>
-            </div>
-          )}
+
 
         </div>
       </main>
@@ -1022,13 +1089,25 @@ const SuperAdminPage = () => {
                   <div className="space-y-5">
                     <div>
                       <label className="block text-xs font-bold text-slate-400 uppercase mb-2 ml-1">Physical Address</label>
-                      <input
-                        type="text"
-                        className="w-full px-5 py-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-semibold"
-                        value={serviceForm.address}
-                        onChange={(e) => setServiceForm({ ...serviceForm, address: e.target.value })}
-                        placeholder="Street, District, City..."
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          className="flex-1 px-5 py-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-semibold"
+                          value={serviceForm.address}
+                          onChange={(e) => {
+                            setServiceForm({ ...serviceForm, address: e.target.value });
+                            setIsAddressDirty(true);
+                          }}
+                          onKeyDown={(e) => e.key === 'Enter' && geocodeServiceAddress(serviceForm.address)}
+                          placeholder="Street, District, City..."
+                        />
+                        <button 
+                          onClick={() => geocodeServiceAddress(serviceForm.address)}
+                          className="px-6 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                        >
+                          Locate
+                        </button>
+                      </div>
                     </div>
 
                     <div>

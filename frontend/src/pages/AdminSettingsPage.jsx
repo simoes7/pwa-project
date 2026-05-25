@@ -4,6 +4,9 @@ import AdminSidebar from '../components/AdminSidebar';
 import AdminTopBar from '../components/AdminTopBar';
 import { apiPath, adminHeaders } from '../config';
 
+
+
+
 const AdminSettingsPage = () => {
   const { user, token } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
@@ -21,6 +24,17 @@ const AdminSettingsPage = () => {
   const [estimatedWaitTime, setEstimatedWaitTime] = useState(10);
   const [isOpen, setIsOpen] = useState(true);
   const [isFastTrackAvailable, setIsFastTrackAvailable] = useState(false);
+
+  // Geographic and Branding states
+  const [address, setAddress] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [bannerUrl, setBannerUrl] = useState('');
+  const [coverImageUrl, setCoverImageUrl] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [emailAddress, setEmailAddress] = useState('');
+  const [website, setWebsite] = useState('');
+
+
 
   const defaultSchedule = [
     { day_of_week: 1, morning_open: '08:00', morning_close: '12:00', afternoon_open: '14:00', afternoon_close: '18:00', is_closed: false },
@@ -61,6 +75,13 @@ const AdminSettingsPage = () => {
           setEstimatedWaitTime(myService.estimated_wait_time || 10);
           setIsOpen(!!myService.is_open);
           setIsFastTrackAvailable(!!myService.is_fast_track_available);
+          setAddress(myService.address || '');
+          setLogoUrl(myService.logo_url || '');
+          setBannerUrl(myService.banner_url || '');
+          setCoverImageUrl(myService.cover_image_url || '');
+          setPhoneNumber(myService.phone_number || '');
+          setEmailAddress(myService.email_address || '');
+          setWebsite(myService.website || '');
         }
       }
 
@@ -128,6 +149,22 @@ const AdminSettingsPage = () => {
         body: JSON.stringify({ schedules })
       });
 
+      await fetch(apiPath(`/services/${user.serviceId}/info`), {
+        method: 'PUT',
+        headers: adminHeaders(user, token),
+        body: JSON.stringify({
+          name: businessName,
+          category: serviceCategory,
+          address,
+          logo_url: logoUrl,
+          banner_url: bannerUrl,
+          cover_image_url: coverImageUrl,
+          phone_number: phoneNumber,
+          email_address: emailAddress,
+          website
+        })
+      });
+
       alert('Settings saved successfully!');
     } catch (err) {
       console.error('Error saving settings:', err);
@@ -144,6 +181,7 @@ const AdminSettingsPage = () => {
 
   const navItems = [
     { id: 'general', label: 'General', icon: 'business' },
+
     { id: 'notifications', label: 'Notifications', icon: 'notifications_active' },
     { id: 'queue-logic', label: 'Queue Logic', icon: 'auto_awesome' },
     { id: 'security', label: 'Security', icon: 'security' }
@@ -228,6 +266,39 @@ const AdminSettingsPage = () => {
                   </div>
                 </div>
 
+                <div style={{ ...styles.grid2, marginTop: '1.5rem' }}>
+                  <div style={styles.inputGroup}>
+                    <label style={styles.label}>Phone Number</label>
+                    <input
+                      type="tel"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      style={styles.inputText}
+                      placeholder="+212 5XX XX XX XX"
+                    />
+                  </div>
+                  <div style={styles.inputGroup}>
+                    <label style={styles.label}>Email Address</label>
+                    <input
+                      type="email"
+                      value={emailAddress}
+                      onChange={(e) => setEmailAddress(e.target.value)}
+                      style={styles.inputText}
+                      placeholder="contact@service.com"
+                    />
+                  </div>
+                </div>
+                <div style={{ ...styles.inputGroup, marginTop: '1.5rem' }}>
+                  <label style={styles.label}>Website</label>
+                  <input
+                    type="url"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                    style={styles.inputText}
+                    placeholder="https://www.service.com"
+                  />
+                </div>
+
                 <div style={styles.divider} />
 
                 <h3 className="headline" style={styles.subTitle}>Operational Hours</h3>
@@ -272,6 +343,8 @@ const AdminSettingsPage = () => {
                   })}
                 </div>
               </section>
+
+
 
               {/* Section: Notifications */}
               <section id="notifications" style={styles.sectionPanel}>

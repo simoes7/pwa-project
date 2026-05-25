@@ -1,5 +1,23 @@
 const db = require('../db');
 const { logSystemAction } = require('../utils/logger');
+const { sendNotification } = require('../utils/notifications');
+
+const notifyQueueUpdate = (serviceId, reasonTicketCreatedAt) => {
+  const q = 'SELECT user_id, id FROM tickets WHERE service_id = ? AND status IN ("waiting", "paused") AND created_at > ?';
+  db.query(q, [serviceId, reasonTicketCreatedAt], (err, results) => {
+    if (err) return;
+    results.forEach(t => {
+      // Fetch new position for the notification
+      const posQuery = 'SELECT COUNT(*) as position FROM tickets WHERE service_id = ? AND status IN ("waiting", "called", "paused") AND created_at < (SELECT created_at FROM tickets WHERE id = ?)';
+      db.query(posQuery, [serviceId, t.id], (err, posRes) => {
+        if (!err) {
+          const newPos = posRes[0].position;
+          sendNotification(t.user_id, 'Queue Update', `You moved up in the queue! Your new position is ${newPos}.`, 'info');
+        }
+      });
+    });
+  });
+};
 
 exports.createTicket = (req, res) => {
   const { userId, serviceId, userName } = req.body;
@@ -223,9 +241,24 @@ exports.updateTicketStatus = (req, res) => {
       console.error('Error updating ticket status:', err);
       return res.status(500).json({ error: 'Database error' });
     }
-    db.query('SELECT service_id FROM tickets WHERE id = ?', [id], (err, rows) => {
+    db.query('SELECT service_id, user_id, created_at FROM tickets WHERE id = ?', [id], (err, rows) => {
       if (!err && rows.length > 0) {
-        logSystemAction(`ticket_${status}`, rows[0].service_id, id, req.user?.id || null, { status });
+        const ticket = rows[0];
+        logSystemAction(`ticket_${status}`, ticket.service_id, id, req.user?.id || null, { status });
+        
+        // Notify user based on status
+        if (status === 'called') {
+          sendNotification(ticket.user_id, 'Your Turn!', 'You have been called to a service point. Please proceed.', 'success');
+        } else if (status === 'done') {
+          sendNotification(ticket.user_id, 'Service Completed', 'Your service has been completed. Thank you for using Smart Queue!', 'success');
+        } else if (status === 'cancelled') {
+          sendNotification(ticket.user_id, 'Ticket Cancelled', 'Your ticket has been cancelled by administration.', 'warning');
+        }
+
+        // Notify queue decrease if ticket advanced or left
+        if (['called', 'done', 'cancelled', 'no_show'].includes(status)) {
+          notifyQueueUpdate(ticket.service_id, ticket.created_at);
+        }
       }
     });
     res.json({ message: 'Ticket updated successfully' });
@@ -270,6 +303,16 @@ exports.updateTicketStatusSelf = (req, res) => {
         return res.status(500).json({ error: 'Database error' });
       }
       logSystemAction(`ticket_${status}`, serviceId, id, userId, { status });
+      
+      // Notify queue decrease if cancelled
+      if (status === 'cancelled') {
+        db.query('SELECT created_at FROM tickets WHERE id = ?', [id], (err, rows) => {
+          if (!err && rows.length > 0) {
+            notifyQueueUpdate(serviceId, rows[0].created_at);
+          }
+        });
+      }
+
       res.json({ message: 'Ticket updated successfully' });
     });
   });
@@ -350,6 +393,13 @@ exports.callNextTicket = (req, res) => {
     db.query(updateQuery, [servicePointId || null, ticketId], (err) => {
       if (err) return res.status(500).json({ error: 'Database error updating ticket status: ' + err.message });
       logSystemAction('ticket_called', serviceId, ticketId, req.user?.id || null, { servicePointId });
+      
+      // Notify the user who was called
+      sendNotification(results[0].user_id, 'Your Turn!', 'You have been called to a service point. Please proceed.', 'success');
+      
+      // Notify others that the queue moved
+      notifyQueueUpdate(serviceId, results[0].created_at);
+
       res.json({ success: true, message: 'Ticket called successfully', ticketId });
     });
   });

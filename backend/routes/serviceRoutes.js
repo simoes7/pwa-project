@@ -5,7 +5,7 @@ const { authenticateToken, requireRole, requireServiceAdmin } = require('../midd
 
 router.get('/', serviceController.getServices);
 router.post('/', authenticateToken, requireRole(['super_admin']), serviceController.createService);
-router.put('/:id/info', authenticateToken, requireRole(['super_admin']), serviceController.updateServiceInfo);
+router.put('/:id/info', authenticateToken, requireServiceAdmin, serviceController.updateServiceInfo);
 router.put('/:id/operations', authenticateToken, requireServiceAdmin, serviceController.updateServiceOperations);
 router.get('/:id/schedules', serviceController.getServiceSchedules);
 router.put('/:id/schedules', authenticateToken, requireServiceAdmin, serviceController.updateServiceSchedules);

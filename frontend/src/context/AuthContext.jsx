@@ -120,7 +120,7 @@ export const AuthProvider = ({ children }) => {
 
   const loginWithGoogle = async () => {
     try {
-      const response = await fetch('http://localhost:3001/auth/google', {
+      const response = await fetch(apiPath('/auth/google'), {
         credentials: 'include'
       });
       if (!response.ok) {
@@ -131,7 +131,7 @@ export const AuthProvider = ({ children }) => {
         }
         throw new Error(error.message || 'Google OAuth setup error');
       }
-      window.location.href = 'http://localhost:3001/auth/google';
+      window.location.href = apiPath('/auth/google');
     } catch (error) {
       console.error('Google OAuth error:', error);
       setAuthError('Unable to connect to Google OAuth. Please check if the backend server is running.');

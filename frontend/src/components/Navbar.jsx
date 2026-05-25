@@ -3,12 +3,16 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Button from './Button';
 import Logo from './Logo';
+import { useNotifications } from '../context/NotificationContext';
+import NotificationDropdown from './NotificationDropdown';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const { unreadCount } = useNotifications();
 
   const handleLogout = () => {
     logout();
@@ -21,10 +25,10 @@ const Navbar = () => {
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
   const navLinks = [
-    { name: 'Services', path: '/services' },
-    { name: 'Map', path: '/map' },
-    { name: 'My Ticket', path: '/ticket' },
-    { name: 'Support', path: '/support' },
+    { name: 'Services', path: '/services', icon: 'grid_view' },
+    { name: 'Map', path: '/map', icon: 'explore' },
+    { name: 'My Ticket', path: '/ticket', icon: 'confirmation_number' },
+    { name: 'Support', path: '/support', icon: 'contact_support' },
   ];
 
   return (
@@ -46,27 +50,53 @@ const Navbar = () => {
             <Link 
               key={link.path}
               to={link.path} 
-              style={{...styles.link, ...(isActive(link.path) ? styles.activeLink : {})}}
+              className={`nav-link-pill ${isActive(link.path) ? 'active' : ''}`}
             >
-              {link.name}
+              <span className="material-symbols-outlined">{link.icon}</span>
+              <span>{link.name}</span>
             </Link>
           ))}
           {user?.role === 'admin' && (
-            <Link to="/admin" style={{...styles.link, ...(isActive('/admin') ? styles.activeLink : {}), color: 'var(--secondary)'}}>Admin Hub</Link>
+            <Link 
+              to="/admin" 
+              className={`nav-link-pill ${isActive('/admin') ? 'active' : ''}`}
+              style={{ color: 'var(--secondary)' }}
+            >
+              <span className="material-symbols-outlined">dashboard</span>
+              <span>Admin Hub</span>
+            </Link>
+          )}
+          {user?.role === 'super_admin' && (
+            <Link 
+              to="/super-admin" 
+              className={`nav-link-pill ${isActive('/super-admin') ? 'active' : ''}`}
+              style={{ color: 'var(--secondary)' }}
+            >
+              <span className="material-symbols-outlined">admin_panel_settings</span>
+              <span>Super Admin</span>
+            </Link>
           )}
         </div>
 
         {/* Right Auth (Desktop) */}
         <div style={styles.authContainer} className="hide-mobile">
           {user ? (
-            <div style={styles.profileContainer}>
+            <div className="nav-profile-container">
+              <button 
+                className="nav-notification-btn"
+                title="Notifications"
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '1.25rem' }}>notifications</span>
+                {unreadCount > 0 && <span style={styles.notificationBadge}>{unreadCount}</span>}
+              </button>
               <span style={styles.userName}>{user.name}</span>
               <button 
                 onClick={handleLogout} 
-                style={styles.logoutBtn}
+                className="nav-logout-btn"
                 title="Logout"
               >
-                <span className="material-symbols-outlined">logout</span>
+                <span className="material-symbols-outlined" style={{ fontSize: '1.25rem' }}>logout</span>
               </button>
             </div>
           ) : (
@@ -81,16 +111,27 @@ const Navbar = () => {
           )}
         </div>
 
-        {/* Mobile Menu Toggle */}
-        <button 
-          style={styles.mobileToggle} 
-          className="show-mobile"
-          onClick={toggleMobileMenu}
-        >
-          <span className="material-symbols-outlined">
-            {isMobileMenuOpen ? 'close' : 'menu'}
-          </span>
-        </button>
+        {/* Mobile Menu Toggle & Notifications */}
+        <div className="show-mobile" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {user && (
+            <button 
+              className="nav-notification-btn"
+              title="Notifications"
+              onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '1.25rem' }}>notifications</span>
+              {unreadCount > 0 && <span style={styles.notificationBadge}>{unreadCount}</span>}
+            </button>
+          )}
+          <button 
+            style={styles.mobileToggle} 
+            onClick={toggleMobileMenu}
+          >
+            <span className="material-symbols-outlined">
+              {isMobileMenuOpen ? 'close' : 'menu'}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Mobile Menu Drawer */}
@@ -114,6 +155,15 @@ const Navbar = () => {
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 Admin Hub
+              </Link>
+            )}
+            {user?.role === 'super_admin' && (
+              <Link 
+                to="/super-admin" 
+                style={{...styles.mobileLink, color: 'var(--secondary)'}}
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Super Admin
               </Link>
             )}
             
@@ -153,6 +203,12 @@ const Navbar = () => {
           </div>
         </div>
       )}
+
+      {/* Render Dropdown at the root level of Navbar so it position relative to the full viewport width */}
+      <NotificationDropdown 
+        isOpen={isNotificationsOpen} 
+        onClose={() => setIsNotificationsOpen(false)} 
+      />
     </nav>
   );
 };
@@ -357,6 +413,36 @@ const styles = {
     fontWeight: '700',
     fontSize: '1.125rem',
     cursor: 'pointer'
+  },
+  notificationBtn: {
+    backgroundColor: 'transparent',
+    border: 'none',
+    color: 'var(--on-surface-variant)',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '0.5rem',
+    borderRadius: '50%',
+    transition: 'all 0.2s ease',
+    position: 'relative'
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: '2px',
+    right: '2px',
+    minWidth: '18px',
+    height: '18px',
+    backgroundColor: 'var(--error)',
+    borderRadius: '10px',
+    border: '2px solid white',
+    color: 'white',
+    fontSize: '10px',
+    fontWeight: '800',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '0 4px'
   }
 };
 

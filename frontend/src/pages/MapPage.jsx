@@ -1,10 +1,46 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { MapContainer, TileLayer, Marker, Popup, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import 'leaflet-routing-machine';
+import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 import { apiPath } from '../config';
+
+const RoutingControl = ({ start, end }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!start || !end) return;
+
+    const routingControl = L.Routing.control({
+      waypoints: [
+        L.latLng(start[0], start[1]),
+        L.latLng(end[0], end[1])
+      ],
+      routeWhileDragging: false,
+      addWaypoints: false,
+      fitSelectedRoutes: true,
+      showAlternatives: false,
+      lineOptions: {
+        styles: [{ color: '#0055d7', weight: 5 }] 
+      },
+      createMarker: () => null,
+      show: false 
+    }).addTo(map);
+
+    return () => {
+      try {
+        map.removeControl(routingControl);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+  }, [map, start, end]);
+
+  return null;
+};
 
 // Fix leaflet marker icon issue in React
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -28,10 +64,12 @@ const useWindowWidth = () => {
 };
 
 const MapPage = () => {
-  const [selectedId, setSelectedId] = useState('bank');
+  const [selectedId, setSelectedId] = useState(null);
   const [dbServices, setDbServices] = useState([]);
   const [isTakingTicket, setIsTakingTicket] = useState(false);
   const [activeTickets, setActiveTickets] = useState([]);
+  const [userLocation, setUserLocation] = useState(null);
+  const [showRoute, setShowRoute] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
   const width = useWindowWidth();
@@ -50,30 +88,33 @@ const MapPage = () => {
     }
   }, [user]);
 
-  useEffect(() => {
-    const fetchServices = async () => {
-      try {
-        const response = await fetch(apiPath('/services'));
-        if (response.ok) {
-          const data = await response.json();
-          setDbServices(data);
-          if (data.length > 0) {
-            setSelectedId(data[0].id);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching services:", error);
+  const fetchServices = useCallback(async () => {
+    try {
+      const response = await fetch(apiPath('/services'));
+      if (response.ok) {
+        const data = await response.json();
+        setDbServices(data);
       }
-    };
+    } catch (error) {
+      console.error("Error fetching services:", error);
+    }
+  }, []);
+
+  useEffect(() => {
     fetchServices();
-    fetchActiveTickets();
-  }, [fetchActiveTickets]);
+  }, []); // Only fetch services on mount
+
+  useEffect(() => {
+    if (user) {
+      fetchActiveTickets();
+    }
+  }, [user, fetchActiveTickets]); // Fetch tickets when user is ready
 
   const hasActiveTicket = (serviceId) => activeTickets.some(t => t.service_id === serviceId);
 
 
-  const selectedService = dbServices.find(s => s.id === selectedId) || dbServices[0] || {};
-  const otherServices = dbServices.filter(s => s.id !== selectedId);
+  const selectedService = dbServices.find(s => s.id === selectedId);
+  const otherServices = selectedId ? dbServices.filter(s => s.id !== selectedId) : dbServices;
 
   const handleTakeTicket = async () => {
     if (!user) {
@@ -107,8 +148,30 @@ const MapPage = () => {
 
   const handleDirections = () => {
     if (selectedService.lat && selectedService.lng) {
-      window.open(`https://www.google.com/maps/dir/?api=1&destination=${selectedService.lat},${selectedService.lng}`, '_blank');
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            setUserLocation([latitude, longitude]);
+            setShowRoute(true);
+          },
+          (error) => {
+            console.error("Error getting location:", error);
+            alert("Unable to get your location. Please ensure location services are enabled.");
+            // Fallback to opening Google Maps
+            window.open(`https://www.google.com/maps/dir/?api=1&destination=${selectedService.lat},${selectedService.lng}`, '_blank');
+          }
+        );
+      } else {
+        alert("Geolocation is not supported by your browser.");
+        window.open(`https://www.google.com/maps/dir/?api=1&destination=${selectedService.lat},${selectedService.lng}`, '_blank');
+      }
     }
+  };
+
+  const handleCancelDirections = () => {
+    setShowRoute(false);
+    setUserLocation(null);
   };
 
   const dynamicStyles = {
@@ -179,6 +242,22 @@ const MapPage = () => {
                   </Marker>
                 )
               ))}
+              {showRoute && userLocation && selectedService?.lat && selectedService?.lng && (
+                <RoutingControl 
+                  start={userLocation} 
+                  end={[selectedService.lat, selectedService.lng]} 
+                />
+              )}
+              {userLocation && (
+                <Marker position={userLocation}>
+                  <Tooltip permanent direction="top" offset={[0, -20]} className="custom-tooltip">
+                    <strong>Your Location</strong>
+                  </Tooltip>
+                  <Popup>
+                    <strong>Your Location</strong>
+                  </Popup>
+                </Marker>
+              )}
             </MapContainer>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--on-surface-variant)' }}>Loading map...</div>
@@ -207,58 +286,120 @@ const MapPage = () => {
             </header>
 
             {/* Featured Selection */}
-            <div className="glass-card" style={styles.featuredCard}>
-              <div style={styles.featuredTop}>
-                <div style={{...styles.featuredIconWrap, color: `var(--${selectedService.color_theme || 'primary'})`}}>
-                   <span className="material-symbols-outlined" style={{ fontSize: '2rem' }}>
-                    {selectedService.icon || 'location_on'}
-                   </span>
+            {selectedService ? (
+              <div className="glass-card" style={styles.featuredCard}>
+                <div style={styles.featuredTop}>
+                  <div style={{
+                    ...styles.featuredIconWrap, 
+                    color: `var(--${selectedService.color_theme || 'primary'})`,
+                    overflow: 'hidden'
+                  }}>
+                     {selectedService.logo_url ? (
+                       <img 
+                         src={selectedService.logo_url} 
+                         alt={selectedService.name} 
+                         style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '0.25rem' }} 
+                       />
+                     ) : (
+                       <span className="material-symbols-outlined" style={{ fontSize: '2rem' }}>
+                        {selectedService.icon || 'location_on'}
+                       </span>
+                     )}
+                  </div>
+                  <span style={styles.selectedBadge}>SELECTED</span>
                 </div>
-                <span style={styles.selectedBadge}>SELECTED</span>
-              </div>
-              
-              <h2 className="headline" style={styles.featuredName}>{selectedService.name}</h2>
-              <p style={styles.featuredAddress}>Guéliz Branch, Marrakech</p>
+                
+                <h2 className="headline" style={styles.featuredName}>{selectedService.name}</h2>
+                <p style={styles.featuredAddress}>Guéliz Branch, Marrakech</p>
 
-              <div style={styles.featuredStats}>
-                <div style={styles.featuredStat}>
-                  <span className="material-symbols-outlined" style={{ fontSize: '1rem', color: 'var(--tertiary)' }}>timer</span>
-                  <span style={{ fontWeight: '700', color: 'var(--tertiary)' }}>{((selectedService.people_waiting || 0) + 1) * selectedService.estimated_wait_time}m wait</span>
+                <div style={styles.featuredStats}>
+                  <div style={styles.featuredStat}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '1rem', color: 'var(--tertiary)' }}>timer</span>
+                    <span style={{ fontWeight: '700', color: 'var(--tertiary)' }}>{((selectedService.people_waiting || 0) + 1) * selectedService.estimated_wait_time}m wait</span>
+                  </div>
+                  <div style={styles.featuredStat}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '1rem' }}>group</span>
+                    <span>{selectedService.people_waiting || 0} in queue</span>
+                  </div>
                 </div>
-                <div style={styles.featuredStat}>
-                  <span className="material-symbols-outlined" style={{ fontSize: '1rem' }}>group</span>
-                  <span>{selectedService.people_waiting || 0} in queue</span>
-                </div>
-              </div>
 
-              <div style={styles.featuredActions}>
-                <button 
-                  className={(selectedService.is_open && !hasActiveTicket(selectedService.id)) ? 'primary-gradient' : ''}
-                  style={{
-                    ...styles.tokenBtn, 
-                    opacity: isTakingTicket ? 0.7 : 1,
-                    ...((!selectedService.is_open || hasActiveTicket(selectedService.id)) ? {
-                      backgroundColor: 'var(--surface-container-high)',
-                      color: 'var(--on-surface-variant)',
-                      cursor: 'not-allowed',
-                      boxShadow: 'none'
-                    } : {})
-                  }}
-                  onClick={() => selectedService.is_open && !hasActiveTicket(selectedService.id) && handleTakeTicket()}
-                  disabled={isTakingTicket || !selectedService.is_open || hasActiveTicket(selectedService.id)}
-                >
-                  <span className="material-symbols-outlined">confirmation_number</span>
-                  {isTakingTicket ? 'Generating...' : !selectedService.is_open ? 'Currently Closed' : hasActiveTicket(selectedService.id) ? 'Ticket Taken' : 'Get Digital Token'}
-                </button>
-                <button 
-                  style={styles.directionsBtn}
-                  onClick={handleDirections}
-                >
-                  <span className="material-symbols-outlined">directions</span>
-                  Directions
-                </button>
+                <div style={styles.featuredActions}>
+                  <button 
+                    className={(selectedService.is_open && !hasActiveTicket(selectedService.id)) ? 'primary-gradient' : ''}
+                    style={{
+                      ...styles.tokenBtn, 
+                      opacity: isTakingTicket ? 0.7 : 1,
+                      ...((!selectedService.is_open || hasActiveTicket(selectedService.id)) ? {
+                        backgroundColor: 'var(--surface-container-high)',
+                        color: 'var(--on-surface-variant)',
+                        cursor: 'not-allowed',
+                        boxShadow: 'none'
+                      } : {})
+                    }}
+                    onClick={() => selectedService.is_open && !hasActiveTicket(selectedService.id) && handleTakeTicket()}
+                    disabled={isTakingTicket || !selectedService.is_open || hasActiveTicket(selectedService.id)}
+                  >
+                    <span className="material-symbols-outlined">confirmation_number</span>
+                    {isTakingTicket ? 'Generating...' : !selectedService.is_open ? 'Currently Closed' : hasActiveTicket(selectedService.id) ? 'Ticket Taken' : 'Get Digital Token'}
+                  </button>
+                  <button 
+                    style={styles.directionsBtn}
+                    onClick={handleDirections}
+                  >
+                    <span className="material-symbols-outlined">directions</span>
+                    {showRoute ? 'Update Directions' : 'Directions'}
+                  </button>
+                  {showRoute && (
+                    <button 
+                      style={{
+                        ...styles.directionsBtn, 
+                        backgroundColor: 'var(--error-container)', 
+                        color: 'var(--on-error-container)',
+                        marginTop: '0.25rem'
+                      }}
+                      onClick={handleCancelDirections}
+                    >
+                      <span className="material-symbols-outlined">cancel</span>
+                      Stop Directions
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="glass-card" style={{
+                ...styles.featuredCard,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textAlign: 'center',
+                padding: '2.5rem 1.5rem',
+                minHeight: '220px',
+                color: 'var(--on-surface-variant)',
+              }}>
+                <div style={{
+                  width: '3.5rem',
+                  height: '3.5rem',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--surface-container-high)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '1rem',
+                  color: 'var(--primary)'
+                }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '2rem' }}>
+                    location_searching
+                  </span>
+                </div>
+                <h2 className="headline" style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '0.5rem', color: 'var(--on-surface)' }}>
+                  No Service Selected
+                </h2>
+                <p style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)', lineHeight: '1.5', margin: 0, maxWidth: '280px' }}>
+                  Please choose a service from the list below or select a pin on the map to view details and get a ticket.
+                </p>
+              </div>
+            )}
 
             {/* Other Nearby Options */}
             <div style={styles.nearbySection}>
@@ -267,23 +408,38 @@ const MapPage = () => {
                 {otherServices.map(service => (
                   <div 
                     key={service.id} 
-                    style={styles.nearbyItem}
+                    className="nearby-option-item"
                     onClick={() => setSelectedId(service.id)}
                   >
-                    <div style={{ 
-                      ...styles.nearbyIcon, 
-                      backgroundColor: `var(--${service.color_theme || 'primary'}-container)`,
-                      color: `var(--on-${service.color_theme || 'primary'}-container)`
-                    }}>
-                      <span className="material-symbols-outlined">
-                        {service.icon || 'location_on'}
-                      </span>
+                    <div 
+                      className="nearby-option-icon-wrap" 
+                      style={{ 
+                        backgroundColor: `var(--${service.color_theme || 'primary'}-container)`,
+                        color: `var(--on-${service.color_theme || 'primary'}-container)`
+                      }}
+                    >
+                      {service.logo_url ? (
+                        <img 
+                          src={service.logo_url} 
+                          alt={service.name} 
+                          style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '0.25rem' }} 
+                        />
+                      ) : (
+                        <span className="material-symbols-outlined" style={{ fontSize: '1.25rem' }}>
+                          {service.icon || 'location_on'}
+                        </span>
+                      )}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <p style={styles.nearbyName}>{service.name}</p>
-                      <p style={styles.nearbyMeta}>1.2km • {((service.people_waiting || 0) + 1) * service.estimated_wait_time}m wait</p>
+                      <p className="nearby-option-title">{service.name}</p>
+                      <p className="nearby-option-meta">
+                        <span className="material-symbols-outlined" style={{ fontSize: '0.875rem' }}>distance</span>
+                        1.2km • 
+                        <span className="material-symbols-outlined" style={{ fontSize: '0.875rem' }}>timer</span>
+                        {((service.people_waiting || 0) + 1) * service.estimated_wait_time}m wait
+                      </p>
                     </div>
-                    <span className="material-symbols-outlined" style={{ color: 'var(--outline-variant)' }}>chevron_right</span>
+                    <span className="material-symbols-outlined nearby-chevron">chevron_right</span>
                   </div>
                 ))}
               </div>

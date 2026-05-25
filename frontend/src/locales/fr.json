@@ -4,7 +4,7 @@
     "services": "Services",
     "users": "Utilisateurs",
     "analytics": "Analyses",
-    "settings": "Paramètres",
+
     "logout": "Déconnexion",
     "login": "Connexion",
     "register": "S'inscrire",
@@ -18,7 +18,9 @@
     "status": "Statut",
     "active": "Actif",
     "offline": "Hors ligne",
-    "online": "En ligne"
+    "online": "En ligne",
+
+    "adminAccounts": "Comptes Admin"
   },
   "superAdmin": {
     "title": "Centre Super Admin",

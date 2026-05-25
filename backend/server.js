@@ -19,6 +19,7 @@ const servicePointRoutes = require('./routes/servicePointRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
 const faqRoutes = require('./routes/faqRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 const app = express();
 const port = 3001;
@@ -59,11 +60,15 @@ app.use('/service-points', servicePointRoutes);
 app.use('/settings', settingsRoutes);
 app.use('/faqs', faqRoutes);
 app.use('/upload', uploadRoutes);
+app.use('/notifications', notificationRoutes);
 
 // --- Start the Server ---
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Server is running! You can test it at: http://localhost:${port}/hello`);
 });
+
+// Initialize Socket.io
+require('./utils/socket').init(server);
 
 // --- Stability & Error Handling ---
 process.on('uncaughtException', (err) => {
