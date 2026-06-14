@@ -96,3 +96,98 @@
 </body>
 
 </html>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0055d7" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Smart Queue" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Queue</title>
+    <!-- Fonts and Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-tint": "#0055d7",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-container": "#476303",
+                        "secondary-dim": "#681ad9",
+                        "on-secondary-container": "#6617d7",
+                        "inverse-primary": "#5e8bff",
+                        "surface-bright": "#f8f9ff",
+                        "surface-variant": "#d2e4ff",
+                        "surface": "#f8f9ff",
+                        "primary-dim": "#004abe",
+                        "on-secondary-fixed": "#5100b3",
+                        "surface-dim": "#c4dcff",
+                        "secondary": "#742fe5",
+                        "surface-container-low": "#eff4ff",
+                        "error": "#ac3149",
+                        "on-primary-fixed": "#002363",
+                        "on-primary-container": "#00368e",
+                        "outline-variant": "#94b4e0",
+                        "tertiary-fixed-dim": "#ccef85",
+                        "primary-fixed": "#abbfff",
+                        "on-secondary-fixed-variant": "#702ae1",
+                        "secondary-container": "#eaddff",
+                        "on-tertiary": "#f0ffcd",
+                        "inverse-on-surface": "#8e9eb7",
+                        "error-container": "#f76a80",
+                        "on-surface-variant": "#416188",
+                        "on-tertiary-fixed-variant": "#516d10",
+                        "primary-fixed-dim": "#96b1ff",
+                        "secondary-fixed-dim": "#deccff",
+                        "on-tertiary-fixed": "#384f00",
+                        "outline": "#5d7da6",
+                        "inverse-surface": "#000f21",
+                        "on-primary-fixed-variant": "#003ea1",
+                        "tertiary-container": "#dafe92",
+                        "surface-container": "#e5eeff",
+                        "tertiary-fixed": "#dafe92",
+                        "on-surface": "#0d3459",
+                        "primary-container": "#abbfff",
+                        "on-error": "#fff7f7",
+                        "surface-container-highest": "#d2e4ff",
+                        "on-secondary": "#fdf7ff",
+                        "tertiary": "#4c6809",
+                        "primary": "#0055d7",
+                        "on-background": "#0d3459",
+                        "background": "#f8f9ff",
+                        "error-dim": "#770326",
+                        "tertiary-dim": "#415b00",
+                        "surface-container-high": "#dce9ff",
+                        "secondary-fixed": "#eaddff",
+                        "on-primary": "#f9f8ff",
+                        "on-error-container": "#68001f"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Plus Jakarta Sans"],
+                        "display": ["Plus Jakarta Sans"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+  </head>
+  <body class="bg-background text-on-surface selection:bg-primary-container selection:text-on-primary-container">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

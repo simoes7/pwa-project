@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import BottomNav from './components/BottomNav';
+import PWAHandler from './components/PWAHandler';
 
 // Pages (Lazy loaded for optimized bundle sizes)
 const LandingPage = React.lazy(() => import('./pages/LandingPage'));
@@ -26,6 +27,7 @@ const SupportPage = React.lazy(() => import('./pages/SupportPage'));
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
+
   const location = useLocation();
   const [width, setWidth] = useState(window.innerWidth);
 
@@ -45,6 +47,7 @@ function App() {
 
   return (
     <>
+      <PWAHandler />
       {!isAdminPage && <Navbar />}
       <AnimatePresence mode="wait">
         <motion.main

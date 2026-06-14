@@ -12,6 +12,19 @@ router.get('/auth/user', authController.getCurrentUser);
 router.get('/auth/oauth-user', authController.getOauthUser);
 
 // Google OAuth
+router.get('/auth/google/check', (req, res) => {
+  const googleClientId = process.env.GOOGLE_CLIENT_ID;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  
+  if (!googleClientId || !googleClientSecret || googleClientId === 'your_google_client_id_here') {
+    return res.status(500).json({
+      error: 'Google OAuth not configured',
+      message: 'Please configure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env file'
+    });
+  }
+  res.json({ configured: true });
+});
+
 router.get('/auth/google', (req, res) => {
   const googleClientId = process.env.GOOGLE_CLIENT_ID;
   const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -36,6 +49,9 @@ router.get('/auth/google/callback',
         serviceId = saResults[0].service_id;
       }
 
+      const jwt = require('jsonwebtoken');
+      const { JWT_SECRET } = require('../middleware/auth');
+      
       const userData = {
         id: user.id,
         name: user.name,
@@ -44,7 +60,8 @@ router.get('/auth/google/callback',
         serviceId: serviceId
       };
 
-      req.session.oauthUser = userData;
+      const token = jwt.sign(userData, JWT_SECRET, { expiresIn: '24h' });
+      req.session.oauthUser = { ...userData, token };
 
       res.redirect('http://localhost:5173/auth-success');
     });

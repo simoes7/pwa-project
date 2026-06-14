@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useAlert } from '../context/AlertContext';
 import { apiPath } from '../config';
 
 const useWindowWidth = () => {
@@ -15,12 +16,15 @@ const useWindowWidth = () => {
 
 const TicketPage = () => {
   const { user } = useAuth();
+  const { showAlert, showConfirm } = useAlert();
   const navigate = useNavigate();
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
   const [selectedTicketId, setSelectedTicketId] = useState(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
   const fetchTickets = useCallback(async () => {
     if (!user) return;
     try {
@@ -29,19 +33,62 @@ const TicketPage = () => {
       if (response.ok) {
         const data = await response.json();
         setTickets(data);
+        // Cache tickets locally for offline access
+        localStorage.setItem(`cached_tickets_user_${user.id}`, JSON.stringify(data));
+        setError('');
+        
         // Default to first ticket if none selected or selected ticket no longer exists
         if (data.length > 0 && (!selectedTicketId || !data.find(t => t.id === selectedTicketId))) {
           setSelectedTicketId(data[0].id);
         }
       } else {
-        setError('Failed to fetch tickets');
+        // Fetch was not ok, try to load from cache
+        const cached = localStorage.getItem(`cached_tickets_user_${user.id}`);
+        if (cached) {
+          const cachedData = JSON.parse(cached);
+          setTickets(cachedData);
+          setError('');
+          if (cachedData.length > 0 && (!selectedTicketId || !cachedData.find(t => t.id === selectedTicketId))) {
+            setSelectedTicketId(cachedData[0].id);
+          }
+        } else {
+          setError('Failed to fetch tickets');
+        }
       }
-    } catch {
-      setError('Connection error');
+    } catch (err) {
+      // Network/Connection failure, fall back to cache
+      const cached = localStorage.getItem(`cached_tickets_user_${user.id}`);
+      if (cached) {
+        const cachedData = JSON.parse(cached);
+        setTickets(cachedData);
+        setError('');
+        if (cachedData.length > 0 && (!selectedTicketId || !cachedData.find(t => t.id === selectedTicketId))) {
+          setSelectedTicketId(cachedData[0].id);
+        }
+      } else {
+        setError('Connection error');
+      }
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, selectedTicketId]);
+
+  // Handle online/offline event listeners
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      void fetchTickets();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [fetchTickets]);
 
   useEffect(() => {
     if (!user) {
@@ -54,6 +101,7 @@ const TicketPage = () => {
     return () => clearTimeout(initialTimer);
   }, [user, navigate, fetchTickets]);
 
+
   const showActionMessage = (msg, isError = false) => {
     setActionMessage({ text: msg, isError });
     setTimeout(() => setActionMessage(''), 4000);
@@ -61,7 +109,26 @@ const TicketPage = () => {
 
   const updateTicketStatus = async (ticketId, newStatus) => {
     if (newStatus === 'cancelled') {
-      if (!window.confirm('Are you sure you want to cancel this ticket?')) return;
+      showConfirm('Are you sure you want to cancel this ticket? You will lose your position in the queue.', async () => {
+        try {
+          const response = await fetch(apiPath(`/tickets/${ticketId}/self`), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus, userId: user.id })
+          });
+          const data = await response.json();
+          if (response.ok) {
+            fetchTickets();
+            showActionMessage('Ticket cancelled');
+          } else {
+            showActionMessage(data.error || 'Action failed', true);
+          }
+        } catch (err) {
+          console.error('Error updating ticket:', err);
+          showActionMessage('Connection error', true);
+        }
+      }, 'Cancel Ticket');
+      return;
     }
     try {
       const response = await fetch(apiPath(`/tickets/${ticketId}/self`), {
@@ -116,13 +183,43 @@ const TicketPage = () => {
           setShowDelayMessage(data.show_delay_message || false);
           setShowApproachingMessage(data.show_approaching_message || false);
           setAvgServiceTime(data.avg_service_time || 10);
+          // Cache the ETA data
+          localStorage.setItem(`cached_eta_ticket_${activeTicketId}`, JSON.stringify(data));
+        } else {
+          // Fetch not ok, load cache fallback
+          const cached = localStorage.getItem(`cached_eta_ticket_${activeTicketId}`);
+          if (cached) {
+            const data = JSON.parse(cached);
+            setRemainingInFront(data.position || 0);
+            setEtaTime(data.eta);
+            setEtaSeconds(data.eta_seconds || 0);
+            setIsDelayed(data.is_delayed || false);
+            setShowDelayMessage(data.show_delay_message || false);
+            setShowApproachingMessage(data.show_approaching_message || false);
+            setAvgServiceTime(data.avg_service_time || 10);
+          }
         }
-      } catch (err) { console.error(err); }
+      } catch (err) {
+        console.error(err);
+        // Load cache on connection error
+        const cached = localStorage.getItem(`cached_eta_ticket_${activeTicketId}`);
+        if (cached) {
+          const data = JSON.parse(cached);
+          setRemainingInFront(data.position || 0);
+          setEtaTime(data.eta);
+          setEtaSeconds(data.eta_seconds || 0);
+          setIsDelayed(data.is_delayed || false);
+          setShowDelayMessage(data.show_delay_message || false);
+          setShowApproachingMessage(data.show_approaching_message || false);
+          setAvgServiceTime(data.avg_service_time || 10);
+        }
+      }
     };
     fetchETA();
     const interval = setInterval(fetchETA, 10000); // Sync every 10s
     return () => clearInterval(interval);
   }, [activeTicketId]);
+
 
   // Local Countdown Timer (Seconds precision)
   useEffect(() => {
@@ -229,6 +326,31 @@ const TicketPage = () => {
         {/* Background Blurs */}
         <div style={styles.blurTop}></div>
         <div style={styles.blurBottom}></div>
+
+        {/* Connection Offline Indicator */}
+        {!isOnline && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            padding: '1rem 1.5rem',
+            borderRadius: '1.25rem',
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            color: '#b91c1c',
+            marginBottom: '2rem',
+            boxShadow: '0 4px 12px rgba(239, 68, 68, 0.05)',
+            textAlign: 'left'
+          }}>
+            <span className="material-symbols-outlined" style={{ color: '#ef4444', fontVariationSettings: "'FILL' 1" }}>wifi_off</span>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontWeight: '800', fontSize: '0.95rem' }}>Offline Mode Active</span>
+              <span style={{ fontSize: '0.8rem', opacity: 0.85, color: '#991b1b', marginTop: '0.15rem' }}>
+                You are currently disconnected. Displaying last synced ticket position. Online status will resume automatically.
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Ticket Selector - Horizontal Chips */}
         {tickets.length > 1 && (
@@ -444,11 +566,18 @@ const TicketPage = () => {
           {/* Action Row */}
           <div style={styles.actionRow}>
             <button
-              onClick={() => ticket.status === 'paused' ? updateTicketStatus(ticket.id, 'waiting') : updateTicketStatus(ticket.id, 'paused')}
+              onClick={() => {
+                if (!isOnline) {
+                  showAlert('You are currently offline. This action requires internet connection to reach our queue servers.', 'Offline Action Unavailable');
+                  return;
+                }
+                ticket.status === 'paused' ? updateTicketStatus(ticket.id, 'waiting') : updateTicketStatus(ticket.id, 'paused');
+              }}
               disabled={ticket.status === 'called'}
               style={{
                 ...styles.pauseBtn,
-                ...(ticket.status === 'called' ? styles.actionBtnDisabled : {})
+                ...(ticket.status === 'called' ? styles.actionBtnDisabled : {}),
+                ...(!isOnline ? { opacity: 0.5, cursor: 'not-allowed' } : {})
               }}
             >
               <span className="material-symbols-outlined">{ticket.status === 'paused' ? 'play_circle' : 'pause_circle'}</span>
@@ -456,11 +585,18 @@ const TicketPage = () => {
               <span className="show-mobile">{ticket.status === 'paused' ? 'Resume' : ticket.status === 'called' ? 'Called' : 'Pause'}</span>
             </button>
             <button
-              onClick={() => updateTicketStatus(ticket.id, 'cancelled')}
+              onClick={() => {
+                if (!isOnline) {
+                  showAlert('You are currently offline. This action requires internet connection to reach our queue servers.', 'Offline Action Unavailable');
+                  return;
+                }
+                updateTicketStatus(ticket.id, 'cancelled');
+              }}
               disabled={ticket.status === 'called'}
               style={{
                 ...styles.cancelBtn,
-                ...(ticket.status === 'called' ? styles.actionBtnDisabled : {})
+                ...(ticket.status === 'called' ? styles.actionBtnDisabled : {}),
+                ...(!isOnline ? { opacity: 0.5, cursor: 'not-allowed' } : {})
               }}
             >
               <span className="material-symbols-outlined">cancel</span>
@@ -468,6 +604,7 @@ const TicketPage = () => {
               <span className="show-mobile">{ticket.status === 'called' ? 'Called' : 'Cancel'}</span>
             </button>
           </div>
+
         </div>
 
         {/* Location Card */}
