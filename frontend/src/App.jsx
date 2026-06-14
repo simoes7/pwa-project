@@ -24,6 +24,7 @@ const SupportPage = React.lazy(() => import('./pages/SupportPage'));
 
 // Guards
 import ProtectedRoute from './components/ProtectedRoute';
+import InstallPrompt from './components/InstallPrompt';
 
 function App() {
   const location = useLocation();
@@ -46,6 +47,7 @@ function App() {
   return (
     <>
       {!isAdminPage && <Navbar />}
+      <InstallPrompt />
       <AnimatePresence mode="wait">
         <motion.main
           key={location.pathname}
